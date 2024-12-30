@@ -101,17 +101,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", _configs.http_port)).await?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", _configs.http_port.clone())).await?;
     println!("Listening on: {}", listener.local_addr()?);
     let pid = std::process::id();
     println!("PID: {}", pid);
 
+    let config = Arc::new(_configs);
     loop {
         let (stream, _) = listener.accept().await?;
         let liberdus = Arc::clone(&lbd);
+        let config = Arc::clone(&config);
 
         tokio::spawn(async move {
-            let e = http::handle_stream(stream, liberdus).await;
+            let e = http::handle_stream(stream, liberdus, config).await;
             if let Err(e) = e {
                 eprintln!("Error: {}", e);
             }

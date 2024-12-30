@@ -20,14 +20,14 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 
-use crate::liberdus;
+use crate::{liberdus, config};
 
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
 /// TCP stream is shutdown after the response is sent.
 /// No keep-alive is implemented.
 /// No chunked encoding is supported.
-pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>, config: Arc<config::Config>) -> Result<(), Box<dyn std::error::Error>> {
     let mut request_buffer = Vec::new();
 
     // Set a timeout for reading the request
@@ -38,13 +38,11 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
         Ok(Err(e)) => {
             eprintln!("Error reading request: {}", e);
             respond_with_timeout(&mut client_stream).await?;
-            client_stream.shutdown().await?;
             return Err(Box::new(e));
         }
         Err(_) => {
             eprintln!("Timeout reading request from client.");
             respond_with_timeout(&mut client_stream).await?;
-            client_stream.shutdown().await?;
             return Err("Timeout reading from client".into());
         }
     }
@@ -61,8 +59,6 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
     };
 
     let ip_port = format!("{}:{}", target_server.ip.clone(), target_server.port.clone());
-
-    drop(target_server);
 
     let mut server_stream = match timeout(Duration::from_secs(5), TcpStream::connect(ip_port)).await {
         Ok(Ok(stream)) => {
@@ -82,12 +78,34 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
     };
 
     // Forward the client's request to the server
-    if let Err(e) = server_stream.write_all(&request_buffer).await {
-        eprintln!("Error forwarding request to server: {}", e);
-        respond_with_internal_error(&mut client_stream).await?;
-        return Err(Box::new(e));
+    let now = std::time::Instant::now();
+    match timeout(Duration::from_millis(config.max_http_timeout_ms as u64),server_stream.write_all(&request_buffer)).await {
+        Ok(Ok(())) => {},
+        Ok(Err(e)) => {
+            eprintln!("Error forwarding request to server: {}", e);
+            respond_with_internal_error(&mut client_stream).await?;
+            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err(Box::new(e));
+        }
+        Err(_) => {
+            eprintln!("Timeout forwarding request to server.");
+            respond_with_timeout(&mut client_stream).await?;
+            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err("Timeout forwarding request to server".into());
+        }
     }
     println!("Successfully forwarded request to server.");
+    let elapsed = now.elapsed();
+
+    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
 
     // Collect the entire response from the server
     let mut response_data = Vec::new();
