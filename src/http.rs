@@ -1,3 +1,20 @@
+//! # Client Request Handler Module
+//!
+//! This module defines the core logic for handling client requests in a TCP-based system.
+//! It handles the communication between clients and backend servers (consensors) via a load-balancing system.
+//! The module uses asynchronous I/O operations provided by Tokio, ensuring scalability and efficiency.
+//!
+//! ## Features
+//! - Reads and parses HTTP requests from clients with support for timeouts.
+//! - Forwards client requests to a backend consensor server.
+//! - Relays server responses back to the client.
+//! - Implements error handling for timeouts, unavailable servers, and unexpected I/O errors.
+//!
+//! ## Components
+//! - `handle_stream`: The main entry point for processing client requests.
+//! - `read_or_collect`: Reads and collects request or response data with header parsing.
+//! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
+//! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 use tokio::net::TcpStream;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -5,7 +22,7 @@ use tokio::time::{timeout, Duration};
 
 use crate::liberdus;
 
-pub async fn handle_client(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>) -> Result<(), Box<dyn std::error::Error>> {
     let mut request_buffer = Vec::new();
 
     // Set a timeout for reading the request
