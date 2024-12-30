@@ -22,6 +22,11 @@ use tokio::time::{timeout, Duration};
 
 use crate::liberdus;
 
+/// Handles the client request stream by reading the request, forwarding it to a consensor server,
+/// collect the response from validator, and relaying it back to the client.
+/// TCP stream is shutdown after the response is sent.
+/// No keep-alive is implemented.
+/// No chunked encoding is supported.
 pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>) -> Result<(), Box<dyn std::error::Error>> {
     let mut request_buffer = Vec::new();
 
