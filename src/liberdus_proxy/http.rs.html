@@ -158,14 +158,48 @@
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>tokio::net::TcpStream;
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
+//!
+//! This module defines the core logic for handling client requests in a TCP-based system.
+//! It handles the communication between clients and backend servers (consensors) via a load-balancing system.
+//! The module uses asynchronous I/O operations provided by Tokio, ensuring scalability and efficiency.
+//!
+//! ## Features
+//! - Reads and parses HTTP requests from clients with support for timeouts.
+//! - Forwards client requests to a backend consensor server.
+//! - Relays server responses back to the client.
+//! - Implements error handling for timeouts, unavailable servers, and unexpected I/O errors.
+//!
+//! ## Components
+//! - `handle_stream`: The main entry point for processing client requests.
+//! - `read_or_collect`: Reads and collects request or response data with header parsing.
+//! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
+//! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
+</span><span class="kw">use </span>tokio::net::TcpStream;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
 <span class="kw">use </span>tokio::time::{timeout, Duration};
 
 <span class="kw">use </span><span class="kw">crate</span>::liberdus;
 
-<span class="kw">pub async fn </span>handle_client(<span class="kw-2">mut </span>client_stream: TcpStream, liberdus: Arc&lt;liberdus::Liberdus&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+<span class="kw">pub async fn </span>handle_stream(<span class="kw-2">mut </span>client_stream: TcpStream, liberdus: Arc&lt;liberdus::Liberdus&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>request_buffer = Vec::new();
 
     <span class="comment">// Set a timeout for reading the request
