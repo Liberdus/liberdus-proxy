@@ -35,20 +35,6 @@ pub struct Signature {
     pub owner: String,
     pub sig: String,
 }
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct TxInjectResp{
-    pub result: Option<TxInjectRespInner>,
-    pub error: Option<serde_json::Value>
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct TxInjectRespInner{
-    pub reason: String,
-    pub status: u32,
-    pub success: bool,
-    #[allow(non_snake_case)]
-    pub txId: Option<String>,
-}
 
 pub struct Liberdus {
     pub active_nodelist: Arc<RwLock<Vec<Consensor>>>,
@@ -59,29 +45,6 @@ pub struct Liberdus {
     crypto: Arc<crypto::ShardusCrypto>,
     load_distribution_commulative_bias: Arc<RwLock<Vec<f64>>>,
     config: Arc<config::Config>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct GetAccountResp{
-    account: serde_json::Value,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct GetTransactionResp{
-    #[serde(skip_serializing_if = "Option::is_none")]
-    account: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    transaction: Option<serde_json::Value>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct ChatAccount {
-    hash: String,
-    id: String,
-    messages: Vec<serde_json::Value>,
-    timestamp: u128,
-    #[serde(rename = "type")] // Map JSON "type" to the Rust field "type_field"
-    type_field: String,
 }
 
 impl  Liberdus {
@@ -100,6 +63,7 @@ impl  Liberdus {
 
     }
 
+    /// trigger a full nodelist update from one of the archivers
     pub async fn update_active_nodelist(&self){
 
         let archivers = self.archivers.read().await;
