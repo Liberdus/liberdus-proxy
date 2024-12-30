@@ -118,6 +118,8 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
 //! 
@@ -221,17 +223,19 @@
         }
     }
 
-    <span class="kw">let </span>listener = TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, _configs.http_port)).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, _configs.http_port.clone())).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">println!</span>(<span class="string">"Listening on: {}"</span>, listener.local_addr()<span class="question-mark">?</span>);
     <span class="kw">let </span>pid = std::process::id();
     <span class="macro">println!</span>(<span class="string">"PID: {}"</span>, pid);
 
+    <span class="kw">let </span>config = Arc::new(_configs);
     <span class="kw">loop </span>{
         <span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span>lbd);
+        <span class="kw">let </span>config = Arc::clone(<span class="kw-2">&amp;</span>config);
 
         tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">let </span>e = http::handle_stream(stream, liberdus).<span class="kw">await</span>;
+            <span class="kw">let </span>e = http::handle_stream(stream, liberdus, config).<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
                 <span class="macro">eprintln!</span>(<span class="string">"Error: {}"</span>, e);
             }
