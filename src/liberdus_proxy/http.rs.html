@@ -175,6 +175,11 @@
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -199,7 +204,12 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::liberdus;
 
-<span class="kw">pub async fn </span>handle_stream(<span class="kw-2">mut </span>client_stream: TcpStream, liberdus: Arc&lt;liberdus::Liberdus&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+<span class="doccomment">/// Handles the client request stream by reading the request, forwarding it to a consensor server,
+/// collect the response from validator, and relaying it back to the client.
+/// TCP stream is shutdown after the response is sent.
+/// No keep-alive is implemented.
+/// No chunked encoding is supported.
+</span><span class="kw">pub async fn </span>handle_stream(<span class="kw-2">mut </span>client_stream: TcpStream, liberdus: Arc&lt;liberdus::Liberdus&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>request_buffer = Vec::new();
 
     <span class="comment">// Set a timeout for reading the request
