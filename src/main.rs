@@ -1,71 +1,15 @@
-//! This is the main module of the JSON-RPC server.
-//! 
-//! This module sets up and initializes the server, managing shared state, cryptographic utilities,
-//! archiver discovery, and routing for both HTTP and WebSocket-based RPC calls.
-//! 
-//! The server leverages `tokio` for asynchronous operations and `poem` for http.
-//! RPC is custom implemented on top of poem.
-//! 
-//! # Features
-//! - Loads configuration and seeds archivers from a predefined file.
-//! - Supports HTTP and WebSocket endpoints for handling JSON-RPC requests.
-//! - Automatically discovers active archivers and updates nodelists periodically.
-//! - Employs a shared state for thread-safe interaction with the `liberdus` backend.
-//! - Includes CORS middleware for cross-origin requests.
-//! 
-//! # Modules
-//! - [`rpc`]: Implementation of the JSON-RPC protocol for HTTP and WebSocket. 
-//! - [`methods`]: Implements the RPC methods invoked by JSON-RPC requests.
-//! - [`config`]: Manages configuration loading and validation.
-//! - [`archivers`]: Includes utilities for managing and discovering archivers.
-//! - [`liberdus`]: This module includes load aware node selectioin mechnism and chat room
-//! subscription manager.
-//! - [`crypto`]: Provides shardus cryptographic utilities.
-//! - [`collector`]: Utilities for quering chain data from distribution protocol.
-//! 
-//! # Entry Point
-//! The `main` function initializes the server, manages shared state, and launches the application.
-
-mod rpc;
-mod methods;
-mod config;
-mod archivers;
+mod http;
 mod liberdus;
+mod archivers;
 mod crypto;
-mod collector;
+mod config;
 
 use std::sync::Arc;
+use tokio::net::TcpListener;
 use std::fs;
-use poem::{
-    listener::TcpListener,
-    EndpointExt, Route, Server,
-};
 
-/// Shared state accessible across multiple threads.
-/// 
-/// This struct holds the primary `Liberdus` instance, which manages backend
-/// operations such as node discovery and chat room subscriptions.
-#[derive(Clone)]
-pub struct CrossThreadSharedState {
-    /// Instance of the `Liberdus` backend library.
-    liberdus: Arc<liberdus::Liberdus>,
-}
-
-/// The main entry point for the application.
-/// 
-/// # Overview
-/// This function performs the following steps:
-/// - Loads configuration from a predefined file.
-/// - Initializes cryptographic utilities and archiver management.
-/// - Spawns a background task for periodic node discovery and updates.
-/// - Sets up HTTP and WebSocket routes for JSON-RPC calls.
-/// - Starts the server on a specified port.
-/// 
-/// # Returns
-/// - `Ok(())` if the server starts successfully.
-/// - `Err(std::io::Error)` if an I/O error occurs during initialization.
 #[tokio::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _configs = config::Config::load().unwrap_or_else(|err| {
         eprintln!("Failed to load config: {}", err);
         std::process::exit(1);
@@ -109,41 +53,28 @@ async fn main() -> Result<(), std::io::Error> {
             ticker.tick().await;
             Arc::clone(&_archivers).discover().await;
             _liberdus.update_active_nodelist().await;
-            Arc::clone(&_liberdus).discover_new_chats().await;
         }
     });
 
-    let state = CrossThreadSharedState {
-        liberdus: lbd,
-    };
-
-    let cors = poem::middleware::Cors::new();
-
-    println!("Waiting for active nodelist to be populated.....");
+    println!("Waiting for active nodelist...");
     loop {
-        if Arc::clone(&state.liberdus).active_nodelist.read().await.len() > 0 {
+        if lbd.active_nodelist.read().await.len() > 0 {
             break;
         }
     }
 
-    let app = Route::new()
-        .at("/", poem::post(rpc::http_rpc_handler))
-        .at("/ws", poem::get(rpc::ws_rpc_handler))
-        .with(cors)
-        .data(state);
+    let listener = TcpListener::bind("127.0.0.1:3030").await?;
+    println!("Proxy server running on http://127.0.0.1:3030");
 
-    let pid = std::process::id();
-    println!(
-        "JSON-RPC Server running on http://127.0.0.1:{}",
-        _configs.rpc_http_port
-    );
-    println!("Process ID: {}", pid);
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let liberdus = Arc::clone(&lbd);
 
-    // Start the server on the specified port.
-    Server::new(TcpListener::bind((
-        "0.0.0.0",
-        _configs.rpc_http_port,
-    )))
-    .run(app)
-    .await
+        tokio::spawn(async move {
+            let e = http::handle_client(stream, liberdus).await;
+            if let Err(e) = e {
+                eprintln!("Error: {}", e);
+            }
+        });
+    }
 }
