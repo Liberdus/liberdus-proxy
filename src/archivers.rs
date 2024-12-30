@@ -52,6 +52,11 @@ pub struct Signature {
 
 impl ArchiverUtil {
     pub fn new(sc: Arc<ShardusCrypto>, seed: Vec<Archiver>, config: config::Config) -> Self {
+
+        if fs::remove_file("known_archiver_cache.json").is_ok() {
+            println!("Pruning Archiver Cache");
+        };
+
         ArchiverUtil { 
             config,
             seed_list: Arc::new(RwLock::new(seed)),
@@ -163,6 +168,7 @@ impl ArchiverUtil {
 
     }
 
+    /// Returns the reference counted clone of active archivers list.
     pub fn get_active_archivers(&self) -> Arc<RwLock<Vec<Archiver>>> {
         self.active_archivers.clone()
     }

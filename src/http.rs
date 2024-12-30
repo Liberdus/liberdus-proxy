@@ -27,12 +27,6 @@ pub async fn handle_client(mut client_stream: TcpStream, liberdus: Arc<liberdus:
         }
     }
 
-    let mut keep_alive = false;
-    if request_buffer.windows(17).any(|w| w == b"Connection: keep-alive") {
-        keep_alive = true;
-        println!("Client requested keep-alive.");
-    }
-
 
     // Get the next appropriate consensor from liberdus
     let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
@@ -80,30 +74,34 @@ pub async fn handle_client(mut client_stream: TcpStream, liberdus: Arc<liberdus:
         respond_with_internal_error(&mut client_stream).await?;
         tokio::spawn(async move {
             server_stream.shutdown().await.unwrap();
+            drop(server_stream);
         });
         return Err(Box::new(e));
     }
 
     tokio::spawn(async move {
         server_stream.shutdown().await.unwrap();
+        drop(server_stream);
     });
 
 
     // Relay the collected response to the client
+    // [TODO] should remove Connectin: keep-alive
     if let Err(e) = client_stream.write_all(&response_data).await {
         eprintln!("Error relaying response to client: {}", e);
         respond_with_internal_error(&mut client_stream).await?;
         return Err(Box::new(e));
     }
 
-    if !keep_alive {
-        println!("Successfully relayed response to client. Closing client connection.");
-        client_stream.shutdown().await?;
-    }
+    client_stream.shutdown().await?;
 
     Ok(())
 }
 
+/// Reads from the stream until the end of the headers or the end of the body if the Content-Length
+/// header is present. The data is collected into the buffer.
+/// Chunked encoding is not supported. For the purpose of our application this is not necessary, at
+/// least at the momment.
 async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
     let mut temp_buffer = [0; 1024];
     let mut headers_read = false;
@@ -148,11 +146,13 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
     None
 }
 
+/// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
 async fn respond_with_internal_error(client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
     let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 
+/// Takes the stream, responds with a timeout error, and shutdown tcp
 async fn respond_with_timeout(client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
     let response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await

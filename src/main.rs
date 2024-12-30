@@ -1,3 +1,15 @@
+//! Liberdus proxy server is a payload router between client and liberdus network.
+//! It is responsible for handling client requests and forwarding them to the appropriate Validator.
+//! The underlying algorithm used to do weighted random pick of validators is identical to the one
+//! in liberdus rpc server.
+//! Major difference between RPC and proxy server is that proxy merely route the request to the one
+//! of the validator. 
+//! For more features such as websocket chat room subscription, a more consistent response bodies, 
+//! data sourcing from data distribution protocol, and retries, use the RPC server.
+//! # Run proxy server for developement
+//! ```bash
+//! cargo run
+//! ```
 mod http;
 mod liberdus;
 mod archivers;
@@ -22,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let archiver_seed: Vec<archivers::Archiver> = serde_json::from_str(&archiver_seed_data).unwrap();
 
     let crypto = Arc::new(crypto::ShardusCrypto::new(
-        "69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc",
+        &_configs.crypto_seed,
     ));
 
     let arch_utils = Arc::new(archivers::ArchiverUtil::new(
@@ -63,8 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let listener = TcpListener::bind("127.0.0.1:3030").await?;
-    println!("Proxy server running on http://127.0.0.1:3030");
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", _configs.http_port)).await?;
+    println!("Listening on: {}", listener.local_addr()?);
+    let pid = std::process::id();
+    println!("PID: {}", pid);
 
     loop {
         let (stream, _) = listener.accept().await?;

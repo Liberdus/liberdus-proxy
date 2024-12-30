@@ -1,11 +1,15 @@
 //! Configuration for the rpc server.
 use std::fs;
+use serde;
 
 #[derive(Debug, serde::Deserialize)]
 #[derive(Clone)]
 pub struct Config{
-    /// The port on which the RPC server will listen
-    pub rpc_http_port: u16,
+    /// The port on which the proxy server will listen
+    pub http_port: u16,
+
+    /// cryptographic seed
+    pub crypto_seed: String,
 
     /// This is a system directory path to the archiver seed file
     /// Archiver seed file should contain a list of reputable and reliable node
@@ -18,23 +22,11 @@ pub struct Config{
     pub debug: bool,
 
     /// The maximum time in milliseconds that the rpc will cancel a request when communication with
-    /// collector or consensus node
+    /// consensus node
     pub max_http_timeout_ms: u128,
-
-    /// Collector configuration
-    pub collector: CollectorConfig,
 
     /// Standalone network configuration
     pub standalone_network: StandaloneNetworkConfig,
-}
-
-
-
-#[derive(Debug, serde::Deserialize)]
-#[derive(Clone)]
-pub struct CollectorConfig {
-    pub ip: String,
-    pub port: u16,
 }
 
 #[derive(Debug, serde::Deserialize)]

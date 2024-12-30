@@ -24,7 +24,7 @@ jobs:
       run: cargo doc --no-deps
 
     - name: Redirect
-      run: echo '<!DOCTYPE HTML><html lang="en-US"><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=https://liberdus.com/liberdus-rpc/liberdus_rpc"><script type="text/javascript">window.location.href = "https://liberdus.com/liberdus-rpc/liberdus_rpc"</script><title>Page Redirection</title></head><body>If you are not redirected automatically, follow this <a href="https://liberdus.com/liberdus-rpc/liberdus_rpc">link to example</a>.</body></html>' > ./target/doc/index.html
+      run: echo '<!DOCTYPE HTML><html lang="en-US"><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=https://liberdus.com/liberdus-proxy/liberdus_proxy"><script type="text/javascript">window.location.href = "https://liberdus.com/liberdus-proxy/liberdus_proxy"</script><title>Page Redirection</title></head><body>If you are not redirected automatically, follow this <a href="https://liberdus.com/liberdus-proxy/liberdus_proxy">link to example</a>.</body></html>' > ./target/doc/index.html
 
 
     - name: Deploy to gh-pages
