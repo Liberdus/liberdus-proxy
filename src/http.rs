@@ -24,35 +24,27 @@ use crate::{liberdus, config};
 
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
-/// TCP stream is shutdown after the response is sent.
-/// No keep-alive is implemented.
-/// No chunked encoding is supported.
-pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus::Liberdus>, config: Arc<config::Config>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut request_buffer = Vec::new();
-
-    // Set a timeout for reading the request
-    match timeout(Duration::from_secs(10), read_or_collect(&mut client_stream, &mut request_buffer)).await {
-        Ok(Ok(())) => {
-            println!("Successfully read request from client.");
-        },
-        Ok(Err(e)) => {
-            eprintln!("Error reading request: {}", e);
-            respond_with_timeout(&mut client_stream).await?;
-            return Err(Box::new(e));
-        }
-        Err(_) => {
-            eprintln!("Timeout reading request from client.");
-            respond_with_timeout(&mut client_stream).await?;
-            return Err("Timeout reading from client".into());
-        }
-    }
-
-
+/// Handles a single HTTP request from the client stream.
+/// This function assumes it processes only one http payload request.
+/// The proxy will maintain the tcp stream open for a specify amount of time to avoid the handshake
+/// overhead when the client do frequent calls.
+/// Proxy will not maintain tcp stream connected to upstream server/validator. It is always single
+/// use and always shutdown after the response is sent back to the client. If the multiple request
+/// from single client tcp stream, it is advisable to pick different validator each time.
+///
+/// **No chunked encoding is supported.**
+/// **No Multiplexing is supported.**
+pub async fn handle_stream(
+    request_buffer: Vec<u8>,
+    mut client_stream: &mut TcpStream,
+    liberdus: Arc<liberdus::Liberdus>,
+    config: Arc<config::Config>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Get the next appropriate consensor from liberdus
     let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
         Some(consensor) => consensor,
         None => {
-            eprintln!("No consensors available.");
+            // eprintln!("No consensors available.");
             respond_with_internal_error(&mut client_stream).await?;
             return Err("No consensors available".into());
         }
@@ -62,16 +54,16 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
 
     let mut server_stream = match timeout(Duration::from_secs(5), TcpStream::connect(ip_port)).await {
         Ok(Ok(stream)) => {
-            println!("Successfully connected to target server.");
+            // println!("Successfully connected to target server.");
             stream
         },
         Ok(Err(e)) => {
-            eprintln!("Error connecting to target server: {}", e);
+            // eprintln!("Error connecting to target server: {}", e);
             respond_with_timeout(&mut client_stream).await?;
             return Err(Box::new(e));
         }
         Err(_) => {
-            eprintln!("Timeout connecting to target server.");
+            // eprintln!("Timeout connecting to target server.");
             respond_with_timeout(&mut client_stream).await?;
             return Err("Timeout connecting to target server".into());
         }
@@ -79,10 +71,10 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
 
     // Forward the client's request to the server
     let now = std::time::Instant::now();
-    match timeout(Duration::from_millis(config.max_http_timeout_ms as u64),server_stream.write_all(&request_buffer)).await {
+    match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
         Ok(Ok(())) => {},
         Ok(Err(e)) => {
-            eprintln!("Error forwarding request to server: {}", e);
+            // eprintln!("Error forwarding request to server: {}", e);
             respond_with_internal_error(&mut client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
@@ -92,7 +84,7 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
             return Err(Box::new(e));
         }
         Err(_) => {
-            eprintln!("Timeout forwarding request to server.");
+            // eprintln!("Timeout forwarding request to server.");
             respond_with_timeout(&mut client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
@@ -102,7 +94,7 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
             return Err("Timeout forwarding request to server".into());
         }
     }
-    println!("Successfully forwarded request to server.");
+    // println!("Successfully forwarded request to server.");
     let elapsed = now.elapsed();
 
     liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
@@ -110,7 +102,7 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
     // Collect the entire response from the server
     let mut response_data = Vec::new();
     if let Err(e) = read_or_collect(&mut server_stream, &mut response_data).await {
-        eprintln!("Error collecting response from server: {}", e);
+        // eprintln!("Error collecting response from server: {}", e);
         respond_with_internal_error(&mut client_stream).await?;
         tokio::spawn(async move {
             server_stream.shutdown().await.unwrap();
@@ -124,34 +116,37 @@ pub async fn handle_stream(mut client_stream: TcpStream, liberdus: Arc<liberdus:
         drop(server_stream);
     });
 
+    set_http_header(&mut response_data, "Connection", "keep-alive");
+    set_http_header(&mut response_data, "Keep-Alive", format!("timeout={}", config.tcp_keepalive_time_sec).as_str());
 
     // Relay the collected response to the client
-    // [TODO] should remove Connectin: keep-alive
     if let Err(e) = client_stream.write_all(&response_data).await {
-        eprintln!("Error relaying response to client: {}", e);
+        // eprintln!("Error relaying response to client: {}", e);
         respond_with_internal_error(&mut client_stream).await?;
         return Err(Box::new(e));
     }
-
-    client_stream.shutdown().await?;
 
     Ok(())
 }
 
 /// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
-/// Chunked encoding is not supported. For the purpose of our application this is not necessary, at
-/// least at the momment.
-async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
-    let mut temp_buffer = [0; 1024];
+pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
+    const TEMP_BUFFER_SIZE: usize = 1024;
+    let mut temp_buffer = [0; TEMP_BUFFER_SIZE];
     let mut headers_read = false;
     let mut content_length: Option<usize> = None;
 
     loop {
+        // Read into the temporary buffer
         let n = stream.read(&mut temp_buffer).await?;
         if n == 0 {
+            if !headers_read {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Stream closed"));
+            }
             break; // Stream closed
         }
+
         buffer.extend_from_slice(&temp_buffer[..n]);
 
         // Parse headers to determine content length
@@ -160,6 +155,11 @@ async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result
                 headers_read = true;
                 let headers = &buffer[..headers_end + 4];
                 content_length = parse_content_length(headers);
+
+                // Log or handle missing Content-Length
+                if content_length.is_none() {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Missing Content-Length header"));
+                }
             }
         }
 
@@ -170,15 +170,98 @@ async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result
                 break;
             }
         }
+
+        // Optional: Limit the buffer size to prevent potential DoS attacks
+        const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MB
+        if buffer.len() > MAX_PAYLOAD_SIZE {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Payload too large"));
+        }
     }
 
     Ok(())
 }
 
+/// Outer loop to handle multiple HTTP requests from the same stream
+pub async fn handle_connection(
+    mut client_stream: TcpStream,
+    liberdus: Arc<liberdus::Liberdus>,
+    config: Arc<config::Config>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), client_stream.readable()).await {
+            Ok(Ok(())) => {
+                let mut request_buffer = Vec::new();
+
+                match read_or_collect(&mut client_stream, &mut request_buffer).await {
+                    Ok(_) => {
+                        if let Err(e) = handle_stream(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
+                            // eprintln!("Error handling request: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        // eprintln!("Error reading request: {}", e);
+                        break;
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                // eprintln!("Error waiting for stream to become readable: {}", e);
+                break;
+            }
+            Err(_) => {
+                // println!("Connection timed out due to inactivity.");
+                break;
+            }
+        }
+
+    }
+
+    client_stream.shutdown().await?;
+
+    Ok(())
+}
+
+/// Helper function to insert or replace a header in the HTTP response buffer.
+pub fn set_http_header(buffer: &mut Vec<u8>, key: &str, value: &str) {
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        // Locate the end of the headers
+        if let Some(headers_end) = buffer_str.find("\r\n\r\n") {
+            // Collect headers as a vector of Strings
+            let mut headers: Vec<String> = buffer_str[..headers_end].lines().map(String::from).collect();
+            let header_prefix = format!("{}:", key);
+            let mut found = false;
+
+            // Update or replace the existing header
+            for header in headers.iter_mut() {
+                if header.starts_with(&header_prefix) {
+                    *header = format!("{} {}", header_prefix, value);
+                    found = true;
+                    break;
+                }
+            }
+
+            // If the header is not found, add it
+            if !found {
+                headers.push(format!("{}: {}", key, value));
+            }
+
+            // Rebuild the buffer with updated headers and the original body
+            let updated_headers = headers.join("\r\n");
+            let body = &buffer[headers_end..]; // Keep the body untouched
+            let mut new_buffer = updated_headers.into_bytes();
+            new_buffer.extend_from_slice(body);
+
+            *buffer = new_buffer;
+        }
+    }
+}
+
+/// Parses the `Content-Length` header from the given headers.
+/// Returns `None` if the header is missing or invalid.
 fn parse_content_length(headers: &[u8]) -> Option<usize> {
     if let Ok(headers_str) = std::str::from_utf8(headers) {
         for line in headers_str.lines() {
-            if let Some(value) = line.strip_prefix("Content-Length:") {
+            if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
                 return value.trim().parse::<usize>().ok();
             }
         }

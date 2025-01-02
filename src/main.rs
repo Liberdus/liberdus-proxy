@@ -43,8 +43,14 @@ mod crypto;
 mod config;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize};
 use tokio::net::TcpListener;
+use tokio::sync::Semaphore;
 use std::fs;
+
+struct Stats {
+    pub stream_count: Arc<AtomicUsize>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -107,16 +113,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("PID: {}", pid);
 
     let config = Arc::new(_configs);
+
+    let server_stats = Arc::new(Stats {
+        stream_count: Arc::new(AtomicUsize::new(0)),
+    });
+
+    let _stats = Arc::clone(&server_stats);
+
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(1));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        loop {
+            ticker.tick().await;
+            print!("\rActive Connection Streams: {:<3}",_stats.stream_count.load(std::sync::atomic::Ordering::Relaxed));
+        }
+    });
+
+
+    // let semaphore = Arc::new(Semaphore::new(300));
+
     loop {
+        // let throttler = Arc::clone(&semaphore);
         let (stream, _) = listener.accept().await?;
+
+        // if semaphore.available_permits() == 0 {
+        //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        //     continue;
+        // }
+
         let liberdus = Arc::clone(&lbd);
         let config = Arc::clone(&config);
+        let stats = Arc::clone(&server_stats);
 
         tokio::spawn(async move {
-            let e = http::handle_stream(stream, liberdus, config).await;
-            if let Err(e) = e {
-                eprintln!("Error: {}", e);
-            }
+            // let permit = throttler.acquire().await.unwrap();
+            stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let e = http::handle_connection(stream, liberdus, config).await;
+            // if let Err(e) = e {
+            //     eprintln!("Error: {}", e);
+            // }
+            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            // drop(permit);
         });
+
     }
 }
