@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["main"],"mod":["archivers","config","crypto","http","liberdus"]};
+window.SIDEBAR_ITEMS = {"fn":["main"],"mod":["archivers","config","crypto","http","liberdus"],"struct":["Stats"]};

@@ -56,6 +56,9 @@
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
 </span><span class="kw">use </span>std::fs;
 <span class="kw">use </span>serde;
@@ -82,6 +85,9 @@
     <span class="doccomment">/// The maximum time in milliseconds that the rpc will cancel a request when communication with
     /// consensus node
     </span><span class="kw">pub </span>max_http_timeout_ms: u128,
+
+    <span class="doccomment">/// TCP keep alive time in seconds
+    </span><span class="kw">pub </span>tcp_keepalive_time_sec: u32,
 
     <span class="doccomment">/// Standalone network configuration
     </span><span class="kw">pub </span>standalone_network: StandaloneNetworkConfig,

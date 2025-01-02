@@ -120,6 +120,45 @@
 <a href="#120" id="120">120</a>
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
 //! 
@@ -165,8 +204,14 @@
 <span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::atomic::{AtomicUsize};
 <span class="kw">use </span>tokio::net::TcpListener;
+<span class="kw">use </span>tokio::sync::Semaphore;
 <span class="kw">use </span>std::fs;
+
+<span class="kw">struct </span>Stats {
+    <span class="kw">pub </span>stream_count: Arc&lt;AtomicUsize&gt;,
+}
 
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
@@ -229,17 +274,50 @@
     <span class="macro">println!</span>(<span class="string">"PID: {}"</span>, pid);
 
     <span class="kw">let </span>config = Arc::new(_configs);
-    <span class="kw">loop </span>{
-        <span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span>lbd);
+
+    <span class="kw">let </span>server_stats = Arc::new(Stats {
+        stream_count: Arc::new(AtomicUsize::new(<span class="number">0</span>)),
+    });
+
+    <span class="kw">let </span>_stats = Arc::clone(<span class="kw-2">&amp;</span>server_stats);
+
+    tokio::spawn(<span class="kw">async move </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(tokio::time::Duration::from_millis(<span class="number">1</span>));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        <span class="kw">loop </span>{
+            ticker.tick().<span class="kw">await</span>;
+            <span class="macro">print!</span>(<span class="string">"\rActive Connection Streams: {:&lt;3}"</span>,_stats.stream_count.load(std::sync::atomic::Ordering::Relaxed));
+        }
+    });
+
+
+    <span class="comment">// let semaphore = Arc::new(Semaphore::new(300));
+
+    </span><span class="kw">loop </span>{
+        <span class="comment">// let throttler = Arc::clone(&amp;semaphore);
+        </span><span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// if semaphore.available_permits() == 0 {
+        //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        //     continue;
+        // }
+
+        </span><span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span>lbd);
         <span class="kw">let </span>config = Arc::clone(<span class="kw-2">&amp;</span>config);
+        <span class="kw">let </span>stats = Arc::clone(<span class="kw-2">&amp;</span>server_stats);
 
         tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">let </span>e = http::handle_stream(stream, liberdus, config).<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
-                <span class="macro">eprintln!</span>(<span class="string">"Error: {}"</span>, e);
-            }
-        });
+            <span class="comment">// let permit = throttler.acquire().await.unwrap();
+            </span>stats.stream_count.fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="kw">let </span>e = http::handle_connection(stream, liberdus, config).<span class="kw">await</span>;
+            <span class="comment">// if let Err(e) = e {
+            //     eprintln!("Error: {}", e);
+            // }
+            </span>stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="comment">// drop(permit);
+        </span>});
+
     }
 }
 </code></pre></div></section></main></body></html>
