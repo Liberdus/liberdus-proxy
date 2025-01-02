@@ -181,7 +181,7 @@ impl  Liberdus {
             return 1.0; // All timeouts are the same
         }
         let timetaken_ms_f = timetaken_ms as f64;
-        let min_timeout_f = 0.01 as f64;
+        let min_timeout_f = 0.0 as f64;
         let max_timeout_f = max_timeout as f64;
         1.0 - (timetaken_ms_f - min_timeout_f) / (max_timeout_f - min_timeout_f)
     }
@@ -254,7 +254,7 @@ impl  Liberdus {
         };
 
         let max_timeout = self.config.max_http_timeout_ms.try_into().unwrap_or(4000); // 3 seconds
-        let mut sorted_nodes = nodes.clone();
+        let mut sorted_nodes = nodes;
 
         sorted_nodes.sort_by(|a, b| {
             let a_time = trip_ms.get(&a.id).unwrap_or(&max_timeout);
@@ -304,6 +304,16 @@ impl  Liberdus {
 
             let mut rng = thread_rng();
             let total_bias = *cumulative_weights.last().unwrap_or(&1.0);
+
+
+            // If all nodes have the same bias, return a random node
+            if total_bias == 0.0 {
+                let idx = rng.gen_range(0..nodes.len());
+                self.round_robin_index.store(0, std::sync::atomic::Ordering::Relaxed);
+                self.list_prepared.store(false, std::sync::atomic::Ordering::Relaxed);
+                return Some((idx, nodes[idx].clone()));
+            }
+
             let random_value: f64 = rng.gen_range(0.0..total_bias);
 
             let index = match cumulative_weights.binary_search_by(
@@ -329,7 +339,9 @@ impl  Liberdus {
         if self.active_nodelist.read().await.is_empty() {
             return None;
         }
-        match self.list_prepared.load(std::sync::atomic::Ordering::Relaxed) && self.load_distribution_commulative_bias.read().await.clone().len() > 0 {
+        match 
+            self.list_prepared.load(std::sync::atomic::Ordering::Relaxed) && 
+            (self.load_distribution_commulative_bias.read().await.clone().len() == self.active_nodelist.read().await.len()) {
             true => {
                return self.get_random_consensor_biased().await 
             },
@@ -352,6 +364,11 @@ impl  Liberdus {
     }
 
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128){
+        // list already prepared on the first round robin,  no need to keep recording rtt for nodes
+        if self.list_prepared.load(std::sync::atomic::Ordering::Relaxed) == true {
+            return;
+        }
+
         let trip_ms_map = self.trip_ms.clone();
 
         tokio::spawn(async move {
