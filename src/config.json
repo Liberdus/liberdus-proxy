@@ -1,12 +1,13 @@
 {
-    "http_port": 8545,
+    "http_port": 3030,
     "archiver_seed_path": "./src/archiver_seed.json",
-    "nodelist_refresh_interval_sec": 40,
+    "nodelist_refresh_interval_sec": 59,
     "max_http_timeout_ms": 4000,
     "crypto_seed": "69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc",
     "debug": true,
+    "tcp_keepalive_time_sec": 1,
     "standalone_network": {
-        "enabled":  true,
+        "enabled":  false,
         "replacement_ip": "63.141.233.178"
     }
 }

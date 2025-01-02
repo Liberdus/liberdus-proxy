@@ -25,6 +25,9 @@ pub struct Config{
     /// consensus node
     pub max_http_timeout_ms: u128,
 
+    /// TCP keep alive time in seconds
+    pub tcp_keepalive_time_sec: u32,
+
     /// Standalone network configuration
     pub standalone_network: StandaloneNetworkConfig,
 }
