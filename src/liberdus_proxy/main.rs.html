@@ -159,6 +159,12 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
 //! 
@@ -296,7 +302,13 @@
 
     </span><span class="kw">loop </span>{
         <span class="comment">// let throttler = Arc::clone(&amp;semaphore);
-        </span><span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="kw">let </span>(stream, <span class="kw">_</span>) = <span class="kw">match </span>listener.accept().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(s) =&gt; s,
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">"Error: {}"</span>, e);
+                <span class="kw">continue</span>;
+            }
+        };
 
         <span class="comment">// if semaphore.available_permits() == 0 {
         //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -310,11 +322,11 @@
         tokio::spawn(<span class="kw">async move </span>{
             <span class="comment">// let permit = throttler.acquire().await.unwrap();
             </span>stats.stream_count.fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-            <span class="kw">let </span>e = http::handle_connection(stream, liberdus, config).<span class="kw">await</span>;
-            <span class="comment">// if let Err(e) = e {
-            //     eprintln!("Error: {}", e);
-            // }
-            </span>stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="kw">let </span>e = http::handle_stream(stream, liberdus, config).<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
+                <span class="macro">eprintln!</span>(<span class="string">"Error: {}"</span>, e);
+            }
+            stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
             <span class="comment">// drop(permit);
         </span>});
 
