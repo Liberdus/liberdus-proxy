@@ -135,7 +135,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         // let throttler = Arc::clone(&semaphore);
-        let (stream, _) = listener.accept().await?;
+        let (stream, _) = match listener.accept().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                continue;
+            }
+        };
 
         // if semaphore.available_permits() == 0 {
         //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -149,10 +155,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             // let permit = throttler.acquire().await.unwrap();
             stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let e = http::handle_connection(stream, liberdus, config).await;
-            // if let Err(e) = e {
-            //     eprintln!("Error: {}", e);
-            // }
+            let e = http::handle_stream(stream, liberdus, config).await;
+            if let Err(e) = e {
+                eprintln!("Error: {}", e);
+            }
             stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             // drop(permit);
         });

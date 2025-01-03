@@ -34,7 +34,7 @@ use crate::{liberdus, config};
 ///
 /// **No chunked encoding is supported.**
 /// **No Multiplexing is supported.**
-pub async fn handle_stream(
+pub async fn handle_request(
     request_buffer: Vec<u8>,
     mut client_stream: &mut TcpStream,
     liberdus: Arc<liberdus::Liberdus>,
@@ -44,7 +44,7 @@ pub async fn handle_stream(
     let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
         Some(consensor) => consensor,
         None => {
-            // eprintln!("No consensors available.");
+            eprintln!("No consensors available.");
             respond_with_internal_error(&mut client_stream).await?;
             return Err("No consensors available".into());
         }
@@ -52,18 +52,18 @@ pub async fn handle_stream(
 
     let ip_port = format!("{}:{}", target_server.ip.clone(), target_server.port.clone());
 
-    let mut server_stream = match timeout(Duration::from_secs(5), TcpStream::connect(ip_port)).await {
+    let mut server_stream = match timeout(Duration::from_secs(3), TcpStream::connect(ip_port)).await {
         Ok(Ok(stream)) => {
-            // println!("Successfully connected to target server.");
+            println!("Successfully connected to target server.");
             stream
         },
         Ok(Err(e)) => {
-            // eprintln!("Error connecting to target server: {}", e);
+            eprintln!("Error connecting to target server: {}", e);
             respond_with_timeout(&mut client_stream).await?;
             return Err(Box::new(e));
         }
         Err(_) => {
-            // eprintln!("Timeout connecting to target server.");
+            eprintln!("Timeout connecting to target server.");
             respond_with_timeout(&mut client_stream).await?;
             return Err("Timeout connecting to target server".into());
         }
@@ -74,7 +74,7 @@ pub async fn handle_stream(
     match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
         Ok(Ok(())) => {},
         Ok(Err(e)) => {
-            // eprintln!("Error forwarding request to server: {}", e);
+            eprintln!("Error forwarding request to server: {}", e);
             respond_with_internal_error(&mut client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
@@ -84,7 +84,7 @@ pub async fn handle_stream(
             return Err(Box::new(e));
         }
         Err(_) => {
-            // eprintln!("Timeout forwarding request to server.");
+            eprintln!("Timeout forwarding request to server.");
             respond_with_timeout(&mut client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
@@ -94,7 +94,7 @@ pub async fn handle_stream(
             return Err("Timeout forwarding request to server".into());
         }
     }
-    // println!("Successfully forwarded request to server.");
+    println!("Successfully forwarded request to server.");
     let elapsed = now.elapsed();
 
     liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
@@ -102,7 +102,7 @@ pub async fn handle_stream(
     // Collect the entire response from the server
     let mut response_data = Vec::new();
     if let Err(e) = read_or_collect(&mut server_stream, &mut response_data).await {
-        // eprintln!("Error collecting response from server: {}", e);
+        eprintln!("Error collecting response from server: {}", e);
         respond_with_internal_error(&mut client_stream).await?;
         tokio::spawn(async move {
             server_stream.shutdown().await.unwrap();
@@ -121,7 +121,7 @@ pub async fn handle_stream(
 
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
-        // eprintln!("Error relaying response to client: {}", e);
+        eprintln!("Error relaying response to client: {}", e);
         respond_with_internal_error(&mut client_stream).await?;
         return Err(Box::new(e));
     }
@@ -156,9 +156,9 @@ pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Re
                 let headers = &buffer[..headers_end + 4];
                 content_length = parse_content_length(headers);
 
-                // Log or handle missing Content-Length
                 if content_length.is_none() {
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Missing Content-Length header"));
+                    // then no body
+                    break;
                 }
             }
         }
@@ -172,7 +172,7 @@ pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Re
         }
 
         // Optional: Limit the buffer size to prevent potential DoS attacks
-        const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MB
+        const MAX_PAYLOAD_SIZE: usize = (1024 * 1024) * 2; // 2 MB
         if buffer.len() > MAX_PAYLOAD_SIZE {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Payload too large"));
         }
@@ -182,7 +182,7 @@ pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Re
 }
 
 /// Outer loop to handle multiple HTTP requests from the same stream
-pub async fn handle_connection(
+pub async fn handle_stream(
     mut client_stream: TcpStream,
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
@@ -194,29 +194,34 @@ pub async fn handle_connection(
 
                 match read_or_collect(&mut client_stream, &mut request_buffer).await {
                     Ok(_) => {
-                        if let Err(e) = handle_stream(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
-                            // eprintln!("Error handling request: {}", e);
+                        if let Err(e) = handle_request(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
+                            eprintln!("Error handling request: {}", e);
                         }
                     }
                     Err(e) => {
-                        // eprintln!("Error reading request: {}", e);
+                        eprintln!("Error reading request: {}", e);
                         break;
                     }
                 }
             }
             Ok(Err(e)) => {
-                // eprintln!("Error waiting for stream to become readable: {}", e);
+                eprintln!("Error waiting for stream to become readable: {}", e);
                 break;
             }
             Err(_) => {
-                // println!("Connection timed out due to inactivity.");
+                println!("Connection timed out due to inactivity.");
                 break;
             }
         }
 
     }
 
-    client_stream.shutdown().await?;
+    match client_stream.shutdown().await {
+        Ok(_) => {},
+        Err(e) => {
+            eprintln!("Error shutting down client stream: {}", e);
+        }
+    };
 
     Ok(())
 }
