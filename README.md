@@ -33,6 +33,7 @@ Configure the seed archiver in `./src/seed_archiver.json` to have the same ip an
 Note that standalone network may never be used in production.
 
 # Run the server
+Make sure you current working directory is inside the root of the repository. And then run the following command.
 ```bash
 cargo run
 ```
