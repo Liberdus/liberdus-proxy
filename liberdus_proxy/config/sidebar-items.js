@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Config","StandaloneNetworkConfig"]};
+window.SIDEBAR_ITEMS = {"struct":["Config","StandaloneNetworkConfig","TLSConfig"]};

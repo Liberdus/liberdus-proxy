@@ -59,6 +59,17 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
 </span><span class="kw">use </span>std::fs;
 <span class="kw">use </span>serde;
@@ -91,6 +102,8 @@
 
     <span class="doccomment">/// Standalone network configuration
     </span><span class="kw">pub </span>standalone_network: StandaloneNetworkConfig,
+
+    <span class="kw">pub </span>tls: TLSConfig,
 }
 
 <span class="attr">#[derive(Debug, serde::Deserialize)]
@@ -102,6 +115,15 @@
 </span><span class="kw">pub struct </span>StandaloneNetworkConfig {
     <span class="kw">pub </span>replacement_ip: String,
     <span class="kw">pub </span>enabled: bool,
+}
+
+<span class="attr">#[derive(Debug, serde::Deserialize)]
+#[derive(Clone)]
+</span><span class="doccomment">/// TLS configuration
+</span><span class="kw">pub struct </span>TLSConfig {
+    <span class="kw">pub </span>enabled: bool,
+    <span class="kw">pub </span>cert_path: String,
+    <span class="kw">pub </span>key_path: String,
 }
 
 <span class="doccomment">/// Load the configuration from the config json file

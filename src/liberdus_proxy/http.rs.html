@@ -286,6 +286,68 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -304,11 +366,70 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 </span><span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
 <span class="kw">use </span>tokio::time::{timeout, Duration};
+<span class="kw">use </span>tokio_rustls::TlsStream;
 
 <span class="kw">use crate</span>::{liberdus, config};
+
+
+<span class="comment">// Create a type alias for a unified stream type
+</span><span class="kw">pub enum </span>StreamWrapper {
+    Plain(TcpStream),
+    Tls(TlsStream&lt;TcpStream&gt;),
+}
+
+<span class="kw">impl </span>StreamWrapper {
+    <span class="kw">pub async fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;mut </span>[u8]) -&gt; tokio::io::Result&lt;usize&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            StreamWrapper::Plain(<span class="kw-2">ref mut </span>stream) =&gt; stream.read(buf).<span class="kw">await</span>,
+            StreamWrapper::Tls(<span class="kw-2">ref mut </span>stream) =&gt; Pin::new(stream).read(buf).<span class="kw">await</span>,
+        }
+    }
+
+    <span class="kw">pub async fn </span>write_all(<span class="kw-2">&amp;mut </span><span class="self">self</span>, buf: <span class="kw-2">&amp;</span>[u8]) -&gt; tokio::io::Result&lt;()&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            StreamWrapper::Plain(<span class="kw-2">ref mut </span>stream) =&gt; stream.write_all(buf).<span class="kw">await</span>,
+            StreamWrapper::Tls(<span class="kw-2">ref mut </span>stream) =&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>pinned = Pin::new(stream);            
+                    <span class="kw">let _ </span>= pinned.write_all(buf).<span class="kw">await</span>;
+                    pinned.flush().<span class="kw">await
+            </span>},
+        }
+    }
+
+    <span class="kw">pub async fn </span>shutdown(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; tokio::io::Result&lt;()&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            StreamWrapper::Plain(<span class="kw-2">ref mut </span>stream) =&gt; stream.shutdown().<span class="kw">await</span>,
+            StreamWrapper::Tls(<span class="kw-2">ref mut </span>stream) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>st = Pin::new(stream);
+                <span class="comment">// Ensure all data is written before shutting down
+                </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = st.flush().<span class="kw">await </span>{
+                    <span class="macro">eprintln!</span>(<span class="string">"Error flushing TLS stream: {}"</span>, e);
+                }
+                st.shutdown().<span class="kw">await
+            </span>}
+        }
+    }
+
+    <span class="kw">pub async fn </span>readable(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; tokio::io::Result&lt;()&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            StreamWrapper::Plain(<span class="kw-2">ref mut </span>stream) =&gt; stream.readable().<span class="kw">await</span>,
+            StreamWrapper::Tls(<span class="kw-2">ref mut </span>stream) =&gt; {
+                <span class="kw">let </span>(tcp_stream, tls) = stream.get_mut();
+                <span class="kw">loop </span>{
+                    <span class="kw">let _ </span>= tcp_stream.readable().<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">match </span>tls.wants_read() {
+                        <span class="bool-val">true </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(()),
+                        <span class="bool-val">false </span>=&gt; <span class="kw">continue</span>,
+                    }
+                }
+            }
+        }
+    }
+}
 
 <span class="doccomment">/// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -324,7 +445,7 @@
 /// **No Multiplexing is supported.**
 </span><span class="kw">pub async fn </span>handle_request(
     request_buffer: Vec&lt;u8&gt;,
-    <span class="kw-2">mut </span>client_stream: <span class="kw-2">&amp;mut </span>TcpStream,
+    client_stream: <span class="kw-2">&amp;mut </span>StreamWrapper,
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
@@ -333,26 +454,26 @@
         <span class="prelude-val">Some</span>(consensor) =&gt; consensor,
         <span class="prelude-val">None </span>=&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"No consensors available."</span>);
-            respond_with_internal_error(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+            respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"No consensors available"</span>.into());
         }
     };
 
     <span class="kw">let </span>ip_port = <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, target_server.ip.clone(), target_server.port.clone());
 
-    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(Duration::from_secs(<span class="number">3</span>), TcpStream::connect(ip_port)).<span class="kw">await </span>{
+    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), TcpStream::connect(ip_port)).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; {
             <span class="macro">println!</span>(<span class="string">"Successfully connected to target server."</span>);
-            stream
+            StreamWrapper::Plain(stream)
         },
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error connecting to target server: {}"</span>, e);
-            respond_with_timeout(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
         }
         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Timeout connecting to target server."</span>);
-            respond_with_timeout(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Timeout connecting to target server"</span>.into());
         }
     };
@@ -360,10 +481,14 @@
     <span class="comment">// Forward the client's request to the server
     </span><span class="kw">let </span>now = std::time::Instant::now();
     <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), server_stream.write_all(<span class="kw-2">&amp;</span>request_buffer)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {},
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
+            server_stream.readable().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>elapsed = now.elapsed();
+            liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+        },
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error forwarding request to server: {}"</span>, e);
-            respond_with_internal_error(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+            respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(<span class="kw">async move </span>{
                 server_stream.shutdown().<span class="kw">await</span>.unwrap();
@@ -373,7 +498,7 @@
         }
         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Timeout forwarding request to server."</span>);
-            respond_with_timeout(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(<span class="kw">async move </span>{
                 server_stream.shutdown().<span class="kw">await</span>.unwrap();
@@ -383,15 +508,12 @@
         }
     }
     <span class="macro">println!</span>(<span class="string">"Successfully forwarded request to server."</span>);
-    <span class="kw">let </span>elapsed = now.elapsed();
-
-    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
 
     <span class="comment">// Collect the entire response from the server
     </span><span class="kw">let </span><span class="kw-2">mut </span>response_data = Vec::new();
     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = read_or_collect(<span class="kw-2">&amp;mut </span>server_stream, <span class="kw-2">&amp;mut </span>response_data).<span class="kw">await </span>{
         <span class="macro">eprintln!</span>(<span class="string">"Error collecting response from server: {}"</span>, e);
-        respond_with_internal_error(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+        respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
         tokio::spawn(<span class="kw">async move </span>{
             server_stream.shutdown().<span class="kw">await</span>.unwrap();
             drop(server_stream);
@@ -410,7 +532,7 @@
     <span class="comment">// Relay the collected response to the client
     </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_stream.write_all(<span class="kw-2">&amp;</span>response_data).<span class="kw">await </span>{
         <span class="macro">eprintln!</span>(<span class="string">"Error relaying response to client: {}"</span>, e);
-        respond_with_internal_error(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+        respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
     }
 
@@ -419,7 +541,7 @@
 
 <span class="doccomment">/// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
-</span><span class="kw">pub async fn </span>read_or_collect(stream: <span class="kw-2">&amp;mut </span>TcpStream, buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+</span><span class="kw">pub async fn </span>read_or_collect(stream: <span class="kw-2">&amp;mut </span>StreamWrapper, buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
     <span class="kw">const </span>TEMP_BUFFER_SIZE: usize = <span class="number">1024</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>temp_buffer = [<span class="number">0</span>; TEMP_BUFFER_SIZE];
     <span class="kw">let </span><span class="kw-2">mut </span>headers_read = <span class="bool-val">false</span>;
@@ -471,7 +593,7 @@
 
 <span class="doccomment">/// Outer loop to handle multiple HTTP requests from the same stream
 </span><span class="kw">pub async fn </span>handle_stream(
-    <span class="kw-2">mut </span>client_stream: TcpStream,
+    <span class="kw-2">mut </span>client_stream: StreamWrapper,
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
@@ -487,8 +609,9 @@
                         }
                     }
                     <span class="prelude-val">Err</span>(e) =&gt; {
-                        <span class="macro">eprintln!</span>(<span class="string">"Error reading request: {}"</span>, e);
-                        <span class="kw">break</span>;
+                        <span class="comment">// client probably dropped it
+                        // eprintln!("Error reading request: {}", e);
+                        </span><span class="kw">break</span>;
                     }
                 }
             }
@@ -504,11 +627,12 @@
 
     }
 
+
     <span class="kw">match </span>client_stream.shutdown().<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {},
         <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Error shutting down client stream: {}"</span>, e);
-        }
+            <span class="comment">// eprintln!("Error shutting down client stream: {}", e);
+        </span>}
     };
 
     <span class="prelude-val">Ok</span>(())
@@ -563,13 +687,13 @@
 </span>}
 
 <span class="doccomment">/// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
-</span><span class="kw">async fn </span>respond_with_internal_error(client_stream: <span class="kw-2">&amp;mut </span>TcpStream) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+</span><span class="kw">async fn </span>respond_with_internal_error(client_stream: <span class="kw-2">&amp;mut </span>StreamWrapper) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
     <span class="kw">let </span>response = <span class="string">"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
     client_stream.write_all(response.as_bytes()).<span class="kw">await
 </span>}
 
 <span class="doccomment">/// Takes the stream, responds with a timeout error, and shutdown tcp
-</span><span class="kw">async fn </span>respond_with_timeout(client_stream: <span class="kw-2">&amp;mut </span>TcpStream) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+</span><span class="kw">async fn </span>respond_with_timeout(client_stream: <span class="kw-2">&amp;mut </span>StreamWrapper) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
     <span class="kw">let </span>response = <span class="string">"HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
     client_stream.write_all(response.as_bytes()).<span class="kw">await
 </span>}
