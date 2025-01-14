@@ -16,11 +16,70 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 use tokio::net::TcpStream;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
+use tokio_rustls::TlsStream;
 
 use crate::{liberdus, config};
+
+
+// Create a type alias for a unified stream type
+pub enum StreamWrapper {
+    Plain(TcpStream),
+    Tls(TlsStream<TcpStream>),
+}
+
+impl StreamWrapper {
+    pub async fn read(&mut self, buf: &mut [u8]) -> tokio::io::Result<usize> {
+        match self {
+            StreamWrapper::Plain(ref mut stream) => stream.read(buf).await,
+            StreamWrapper::Tls(ref mut stream) => Pin::new(stream).read(buf).await,
+        }
+    }
+
+    pub async fn write_all(&mut self, buf: &[u8]) -> tokio::io::Result<()> {
+        match self {
+            StreamWrapper::Plain(ref mut stream) => stream.write_all(buf).await,
+            StreamWrapper::Tls(ref mut stream) => {
+                    let mut pinned = Pin::new(stream);            
+                    let _ = pinned.write_all(buf).await;
+                    pinned.flush().await
+            },
+        }
+    }
+
+    pub async fn shutdown(&mut self) -> tokio::io::Result<()> {
+        match self {
+            StreamWrapper::Plain(ref mut stream) => stream.shutdown().await,
+            StreamWrapper::Tls(ref mut stream) => {
+                let mut st = Pin::new(stream);
+                // Ensure all data is written before shutting down
+                if let Err(e) = st.flush().await {
+                    eprintln!("Error flushing TLS stream: {}", e);
+                }
+                st.shutdown().await
+            }
+        }
+    }
+
+    pub async fn readable(&mut self) -> tokio::io::Result<()> {
+        match self {
+            StreamWrapper::Plain(ref mut stream) => stream.readable().await,
+            StreamWrapper::Tls(ref mut stream) => {
+                let (tcp_stream, tls) = stream.get_mut();
+                loop {
+                    let _ = tcp_stream.readable().await?;
+                    match tls.wants_read() {
+                        true => return Ok(()),
+                        false => continue,
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -36,7 +95,7 @@ use crate::{liberdus, config};
 /// **No Multiplexing is supported.**
 pub async fn handle_request(
     request_buffer: Vec<u8>,
-    mut client_stream: &mut TcpStream,
+    client_stream: &mut StreamWrapper,
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -45,26 +104,26 @@ pub async fn handle_request(
         Some(consensor) => consensor,
         None => {
             eprintln!("No consensors available.");
-            respond_with_internal_error(&mut client_stream).await?;
+            respond_with_internal_error(client_stream).await?;
             return Err("No consensors available".into());
         }
     };
 
     let ip_port = format!("{}:{}", target_server.ip.clone(), target_server.port.clone());
 
-    let mut server_stream = match timeout(Duration::from_secs(3), TcpStream::connect(ip_port)).await {
+    let mut server_stream = match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), TcpStream::connect(ip_port)).await {
         Ok(Ok(stream)) => {
             println!("Successfully connected to target server.");
-            stream
+            StreamWrapper::Plain(stream)
         },
         Ok(Err(e)) => {
             eprintln!("Error connecting to target server: {}", e);
-            respond_with_timeout(&mut client_stream).await?;
+            respond_with_timeout(client_stream).await?;
             return Err(Box::new(e));
         }
         Err(_) => {
             eprintln!("Timeout connecting to target server.");
-            respond_with_timeout(&mut client_stream).await?;
+            respond_with_timeout(client_stream).await?;
             return Err("Timeout connecting to target server".into());
         }
     };
@@ -72,10 +131,14 @@ pub async fn handle_request(
     // Forward the client's request to the server
     let now = std::time::Instant::now();
     match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
-        Ok(Ok(())) => {},
+        Ok(Ok(())) => {
+            server_stream.readable().await?;
+            let elapsed = now.elapsed();
+            liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+        },
         Ok(Err(e)) => {
             eprintln!("Error forwarding request to server: {}", e);
-            respond_with_internal_error(&mut client_stream).await?;
+            respond_with_internal_error(client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
                 server_stream.shutdown().await.unwrap();
@@ -85,7 +148,7 @@ pub async fn handle_request(
         }
         Err(_) => {
             eprintln!("Timeout forwarding request to server.");
-            respond_with_timeout(&mut client_stream).await?;
+            respond_with_timeout(client_stream).await?;
             liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
             tokio::spawn(async move {
                 server_stream.shutdown().await.unwrap();
@@ -95,15 +158,12 @@ pub async fn handle_request(
         }
     }
     println!("Successfully forwarded request to server.");
-    let elapsed = now.elapsed();
-
-    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
 
     // Collect the entire response from the server
     let mut response_data = Vec::new();
     if let Err(e) = read_or_collect(&mut server_stream, &mut response_data).await {
         eprintln!("Error collecting response from server: {}", e);
-        respond_with_internal_error(&mut client_stream).await?;
+        respond_with_internal_error(client_stream).await?;
         tokio::spawn(async move {
             server_stream.shutdown().await.unwrap();
             drop(server_stream);
@@ -122,7 +182,7 @@ pub async fn handle_request(
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
         eprintln!("Error relaying response to client: {}", e);
-        respond_with_internal_error(&mut client_stream).await?;
+        respond_with_internal_error(client_stream).await?;
         return Err(Box::new(e));
     }
 
@@ -131,7 +191,7 @@ pub async fn handle_request(
 
 /// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
-pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
+pub async fn read_or_collect(stream: &mut StreamWrapper, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
     const TEMP_BUFFER_SIZE: usize = 1024;
     let mut temp_buffer = [0; TEMP_BUFFER_SIZE];
     let mut headers_read = false;
@@ -183,7 +243,7 @@ pub async fn read_or_collect(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> Re
 
 /// Outer loop to handle multiple HTTP requests from the same stream
 pub async fn handle_stream(
-    mut client_stream: TcpStream,
+    mut client_stream: StreamWrapper,
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -199,7 +259,8 @@ pub async fn handle_stream(
                         }
                     }
                     Err(e) => {
-                        eprintln!("Error reading request: {}", e);
+                        // client probably dropped it
+                        // eprintln!("Error reading request: {}", e);
                         break;
                     }
                 }
@@ -216,10 +277,11 @@ pub async fn handle_stream(
 
     }
 
+
     match client_stream.shutdown().await {
         Ok(_) => {},
         Err(e) => {
-            eprintln!("Error shutting down client stream: {}", e);
+            // eprintln!("Error shutting down client stream: {}", e);
         }
     };
 
@@ -275,13 +337,13 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
 }
 
 /// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
-async fn respond_with_internal_error(client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
+async fn respond_with_internal_error(client_stream: &mut StreamWrapper) -> Result<(), std::io::Error> {
     let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 
 /// Takes the stream, responds with a timeout error, and shutdown tcp
-async fn respond_with_timeout(client_stream: &mut TcpStream) -> Result<(), std::io::Error> {
+async fn respond_with_timeout(client_stream: &mut StreamWrapper) -> Result<(), std::io::Error> {
     let response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }

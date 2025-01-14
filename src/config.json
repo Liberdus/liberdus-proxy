@@ -5,9 +5,14 @@
     "max_http_timeout_ms": 4000,
     "crypto_seed": "69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc",
     "debug": true,
-    "tcp_keepalive_time_sec": 1,
+    "tcp_keepalive_time_sec": 5,
+    "tls": {
+        "enabled": false,
+        "cert_path": "/path/to/tls/certificate/cert.pem",
+        "key_path": "/path/to/tls/key/key.pem"
+    },
     "standalone_network": {
-        "enabled":  false,
+        "enabled":  true,
         "replacement_ip": "63.141.233.178"
     }
 }

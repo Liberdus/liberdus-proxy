@@ -30,6 +30,8 @@ pub struct Config{
 
     /// Standalone network configuration
     pub standalone_network: StandaloneNetworkConfig,
+
+    pub tls: TLSConfig,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -41,6 +43,15 @@ pub struct Config{
 pub struct StandaloneNetworkConfig {
     pub replacement_ip: String,
     pub enabled: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[derive(Clone)]
+/// TLS configuration
+pub struct TLSConfig {
+    pub enabled: bool,
+    pub cert_path: String,
+    pub key_path: String,
 }
 
 /// Load the configuration from the config json file

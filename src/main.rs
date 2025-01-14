@@ -41,12 +41,14 @@ mod liberdus;
 mod archivers;
 mod crypto;
 mod config;
+mod tls;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use std::fs;
+use tokio_rustls::TlsAcceptor;
 
 struct Stats {
     pub stream_count: Arc<AtomicUsize>,
@@ -58,6 +60,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Failed to load config: {}", err);
         std::process::exit(1);
     });
+
+    let tls_config = if _configs.tls.enabled {
+            match tls::configure_tls(
+                &_configs.tls.cert_path, 
+                &_configs.tls.key_path) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    eprintln!("Failed to configure TLS: {}", e);
+                    std::process::exit(1);
+                }
+            }
+    } else {
+        None
+    };
+
+    let tls_acceptor = match tls_config.is_some() {
+        true => {
+            let tls_config = tls_config.unwrap();
+            let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+            Some(tls_acceptor)
+        },
+        false => {
+            None
+        }
+    };
+
+
+
 
     let archiver_seed_data = fs::read_to_string(&_configs.archiver_seed_path)
         .map_err(|err| format!("Failed to read archiver seed file: {}", err))
@@ -135,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         // let throttler = Arc::clone(&semaphore);
-        let (stream, _) = match listener.accept().await {
+        let (raw_stream, _) = match listener.accept().await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -151,13 +181,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let liberdus = Arc::clone(&lbd);
         let config = Arc::clone(&config);
         let stats = Arc::clone(&server_stats);
+        let tls_acceptor = match tls_acceptor.is_some() && config.tls.enabled {
+            true => Some(tls_acceptor.clone().unwrap()),
+            false => None,
+        };
 
         tokio::spawn(async move {
             // let permit = throttler.acquire().await.unwrap();
             stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let e = http::handle_stream(stream, liberdus, config).await;
-            if let Err(e) = e {
-                eprintln!("Error: {}", e);
+            
+
+            match tls_acceptor {
+                Some(tls_acceptor) => {
+                    let tls_stream = tls_acceptor.accept(raw_stream).await;
+                    if let Err(e) = tls_stream {
+                        eprintln!("TLS Acceptor Error: {}", e);
+                        stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                        return;
+                    }
+                    let tls_stream = tokio_rustls::TlsStream::Server(tls_stream.unwrap());
+
+
+                    let e = http::handle_stream(http::StreamWrapper::Tls(tls_stream), liberdus, config).await;
+                    if let Err(e) = e {
+                        eprintln!("Handle Stream Error: {}", e);
+                    }
+                },
+                None => {
+                    let e = http::handle_stream(http::StreamWrapper::Plain(raw_stream), liberdus, config).await;
+                    if let Err(e) = e {
+                        eprintln!("Handle Stream Error: {}", e);
+                    }
+                }
             }
             stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             // drop(permit);
