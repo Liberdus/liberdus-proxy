@@ -18,8 +18,7 @@
 use tokio::net::TcpStream;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Poll;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsStream;
 
@@ -65,47 +64,6 @@ impl StreamWrapper {
         }
     }
 
-    pub async fn try_read(&mut self) -> tokio::io::Result<Vec<u8>> {
-        match self {
-            StreamWrapper::Plain(ref mut stream) => { 
-                match stream.readable().await {
-                    Ok(_) => {},
-                    Err(e) => return Err(e),
-                }
-                let mut buf = Vec::new();
-                match read_or_collect(self, &mut buf).await {
-                    Ok(_) => Ok(buf),
-                    Err(e) => Err(e),
-                }
-            },
-            StreamWrapper::Tls(ref mut stream) => {
-                            // Poll the TLS stream to check readiness and read data
-                let mut read_buf = Vec::new();
-                let mut temp_buf = [0u8; 4096];
-
-                let mut pinned_stream = Pin::new(stream);
-
-                match std::future::poll_fn(|cx| {
-                    let mut read_temp_buf = tokio::io::ReadBuf::new(&mut temp_buf);
-
-                    match pinned_stream.as_mut().poll_read(cx, &mut read_temp_buf) {
-                        Poll::Ready(Ok(())) => {
-                            let filled = read_temp_buf.filled();
-                            read_buf.extend_from_slice(filled); // Collect the read data
-                            Poll::Ready(Ok(()))
-                        }
-                        Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-                        Poll::Pending => Poll::Pending,
-                    }
-                })
-                .await {
-                    Ok(_) => Ok(read_buf),
-                    Err(e) => Err(e),
-                }
-
-            }
-        }
-    }
 }
 
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
@@ -157,12 +115,31 @@ pub async fn handle_request(
 
     // Forward the client's request to the server
     let now = std::time::Instant::now();
-    let mut response_data;
+    let mut response_data = vec![];
     match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
         Ok(Ok(())) => {
-            response_data = server_stream.try_read().await?;
-            let elapsed = now.elapsed();
-            liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+            match read_or_collect(&mut server_stream, &mut response_data).await {
+                Ok(()) => {
+                    let elapsed = now.elapsed();
+                    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                },
+                Err(e) => {
+                    eprintln!("Error reading response from server: {}", e);
+                    respond_with_internal_error(client_stream).await?;
+                    liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                    return Err(Box::new(e));
+                }
+            }
+
+
         },
         Ok(Err(e)) => {
             eprintln!("Error forwarding request to server: {}", e);
@@ -187,14 +164,19 @@ pub async fn handle_request(
     }
     println!("Successfully forwarded request to server.");
 
-    tokio::spawn(async move {
-        server_stream.shutdown().await.unwrap();
-        drop(server_stream);
-    });
+    drop(request_buffer);
+
+    if response_data.is_empty() {
+        eprintln!("Empty response from server.");
+        respond_with_internal_error(client_stream).await?;
+        return Err("Empty response from server".into());
+    }
+
 
     set_http_header(&mut response_data, "Connection", "keep-alive");
     set_http_header(&mut response_data, "Keep-Alive", format!("timeout={}", config.tcp_keepalive_time_sec).as_str());
     set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+
 
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
@@ -249,7 +231,7 @@ pub async fn read_or_collect(stream: &mut StreamWrapper, buffer: &mut Vec<u8>) -
         }
 
         // Optional: Limit the buffer size to prevent potential DoS attacks
-        const MAX_PAYLOAD_SIZE: usize = (1024 * 1024) * 2; // 2 MB
+        const MAX_PAYLOAD_SIZE: usize = (1024 * 1024); // 1 MB
         if buffer.len() > MAX_PAYLOAD_SIZE {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Payload too large"));
         }
@@ -265,10 +247,11 @@ pub async fn handle_stream(
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), client_stream.try_read()).await {
-            Ok(Ok(request_buffer)) => {
+        let mut req_buf = Vec::new();
+        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), read_or_collect(&mut client_stream, &mut req_buf)).await {
+            Ok(Ok(())) => {
 
-                if let Err(e) = handle_request(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
+                if let Err(e) = handle_request(req_buf, &mut client_stream, liberdus.clone(), config.clone()).await {
                     eprintln!("Error handling request: {}", e);
                 }
             }
