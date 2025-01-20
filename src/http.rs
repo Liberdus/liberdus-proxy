@@ -18,7 +18,8 @@
 use tokio::net::TcpStream;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::task::Poll;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsStream;
 
@@ -54,28 +55,54 @@ impl StreamWrapper {
         match self {
             StreamWrapper::Plain(ref mut stream) => stream.shutdown().await,
             StreamWrapper::Tls(ref mut stream) => {
-                let mut st = Pin::new(stream);
+                let mut pinned = Pin::new(stream);
                 // Ensure all data is written before shutting down
-                if let Err(e) = st.flush().await {
+                if let Err(e) = pinned.flush().await {
                     eprintln!("Error flushing TLS stream: {}", e);
                 }
-                st.shutdown().await
+                pinned.shutdown().await
             }
         }
     }
 
-    pub async fn readable(&mut self) -> tokio::io::Result<()> {
+    pub async fn try_read(&mut self) -> tokio::io::Result<Vec<u8>> {
         match self {
-            StreamWrapper::Plain(ref mut stream) => stream.readable().await,
-            StreamWrapper::Tls(ref mut stream) => {
-                let (tcp_stream, tls) = stream.get_mut();
-                loop {
-                    let _ = tcp_stream.readable().await?;
-                    match tls.wants_read() {
-                        true => return Ok(()),
-                        false => continue,
-                    }
+            StreamWrapper::Plain(ref mut stream) => { 
+                match stream.readable().await {
+                    Ok(_) => {},
+                    Err(e) => return Err(e),
                 }
+                let mut buf = Vec::new();
+                match read_or_collect(self, &mut buf).await {
+                    Ok(_) => Ok(buf),
+                    Err(e) => Err(e),
+                }
+            },
+            StreamWrapper::Tls(ref mut stream) => {
+                            // Poll the TLS stream to check readiness and read data
+                let mut read_buf = Vec::new();
+                let mut temp_buf = [0u8; 4096];
+
+                let mut pinned_stream = Pin::new(stream);
+
+                match std::future::poll_fn(|cx| {
+                    let mut read_temp_buf = tokio::io::ReadBuf::new(&mut temp_buf);
+
+                    match pinned_stream.as_mut().poll_read(cx, &mut read_temp_buf) {
+                        Poll::Ready(Ok(())) => {
+                            let filled = read_temp_buf.filled();
+                            read_buf.extend_from_slice(filled); // Collect the read data
+                            Poll::Ready(Ok(()))
+                        }
+                        Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+                        Poll::Pending => Poll::Pending,
+                    }
+                })
+                .await {
+                    Ok(_) => Ok(read_buf),
+                    Err(e) => Err(e),
+                }
+
             }
         }
     }
@@ -130,9 +157,10 @@ pub async fn handle_request(
 
     // Forward the client's request to the server
     let now = std::time::Instant::now();
+    let mut response_data;
     match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
         Ok(Ok(())) => {
-            server_stream.readable().await?;
+            response_data = server_stream.try_read().await?;
             let elapsed = now.elapsed();
             liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
         },
@@ -158,18 +186,6 @@ pub async fn handle_request(
         }
     }
     println!("Successfully forwarded request to server.");
-
-    // Collect the entire response from the server
-    let mut response_data = Vec::new();
-    if let Err(e) = read_or_collect(&mut server_stream, &mut response_data).await {
-        eprintln!("Error collecting response from server: {}", e);
-        respond_with_internal_error(client_stream).await?;
-        tokio::spawn(async move {
-            server_stream.shutdown().await.unwrap();
-            drop(server_stream);
-        });
-        return Err(Box::new(e));
-    }
 
     tokio::spawn(async move {
         server_stream.shutdown().await.unwrap();
@@ -249,29 +265,19 @@ pub async fn handle_stream(
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), client_stream.readable()).await {
-            Ok(Ok(())) => {
-                let mut request_buffer = Vec::new();
+        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), client_stream.try_read()).await {
+            Ok(Ok(request_buffer)) => {
 
-                match read_or_collect(&mut client_stream, &mut request_buffer).await {
-                    Ok(_) => {
-                        if let Err(e) = handle_request(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
-                            eprintln!("Error handling request: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        // client probably dropped it
-                        // eprintln!("Error reading request: {}", e);
-                        break;
-                    }
+                if let Err(e) = handle_request(request_buffer, &mut client_stream, liberdus.clone(), config.clone()).await {
+                    eprintln!("Error handling request: {}", e);
                 }
             }
             Ok(Err(e)) => {
-                eprintln!("Error waiting for stream to become readable: {}", e);
+                eprintln!("Error attempting to read bytes out of client stream: {}", e);
                 break;
             }
             Err(_) => {
-                println!("Connection timed out due to inactivity.");
+                eprintln!("Shutting down Stream due to inactivity beyond keepalive time.");
                 break;
             }
         }
@@ -280,13 +286,11 @@ pub async fn handle_stream(
 
 
     match client_stream.shutdown().await {
-        Ok(_) => {},
-        Err(e) => {
-            // eprintln!("Error shutting down client stream: {}", e);
+        Ok(_) => {Ok(())},
+        Err(_e) => {
+            Ok(())
         }
-    };
-
-    Ok(())
+    }
 }
 
 /// Helper function to insert or replace a header in the HTTP response buffer.

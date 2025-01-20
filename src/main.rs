@@ -193,18 +193,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match tls_acceptor {
                 Some(tls_acceptor) => {
-                    let tls_stream = tls_acceptor.accept(raw_stream).await;
-                    if let Err(e) = tls_stream {
-                        eprintln!("TLS Acceptor Error: {}", e);
-                        stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-                        return;
-                    }
-                    let tls_stream = tokio_rustls::TlsStream::Server(tls_stream.unwrap());
-
-
-                    let e = http::handle_stream(http::StreamWrapper::Tls(tls_stream), liberdus, config).await;
-                    if let Err(e) = e {
-                        eprintln!("Handle Stream Error: {}", e);
+                    match tls_acceptor.accept(raw_stream).await{
+                        Ok(tls_stream) => {
+                            let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                            let e = http::handle_stream(http::StreamWrapper::Tls(tls_stream), liberdus, config).await;
+                            if let Err(e) = e {
+                                eprintln!("Handle Stream Error: {}", e);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("TLS Handshake Error: {}", e);
+                            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                            return
+                        }
                     }
                 },
                 None => {
