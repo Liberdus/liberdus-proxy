@@ -13,3 +13,5 @@ rustls-pemfile = "1.0.0"
 serde_json = "1.0.133"
 sodiumoxide = "0.2.7"
 tokio = { version = "1.16.1", features = ["full"] }
+tokio-tungstenite = { version = "0.26.0", features = ["tokio-rustls"] }
+futures-util = "0.3.31"

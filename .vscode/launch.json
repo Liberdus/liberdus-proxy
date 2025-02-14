@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'liberdus-rpc'",
+            "name": "Debug executable 'liberdus-proxy'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=liberdus-rpc",
-                    "--package=liberdus-rpc"
+                    "--bin=liberdus-proxy",
+                    "--package=liberdus-proxy"
                 ],
                 "filter": {
-                    "name": "liberdus-rpc",
+                    "name": "liberdus-proxy",
                     "kind": "bin"
                 }
             },
@@ -28,16 +28,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'liberdus-rpc'",
+            "name": "Debug unit tests in executable 'liberdus-proxy'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=liberdus-rpc",
-                    "--package=liberdus-rpc"
+                    "--bin=liberdus-proxy",
+                    "--package=liberdus-proxy"
                 ],
                 "filter": {
-                    "name": "liberdus-rpc",
+                    "name": "liberdus-proxy",
                     "kind": "bin"
                 }
             },
@@ -52,10 +52,7 @@
             "request": "attach",
             "name": "Attach to Process",
             "pid": "${command:pickProcess}",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "RUSTFLAGS": "--cfg tokio_unstable"
-            }
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

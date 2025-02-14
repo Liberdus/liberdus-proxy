@@ -8,8 +8,8 @@
     "tcp_keepalive_time_sec": 5,
     "tls": {
         "enabled": false,
-        "cert_path": "/path/to/tls/certificate/cert.pem",
-        "key_path": "/path/to/tls/key/key.pem"
+        "cert_path": "/home/kmt/opt/liberdus/ca.crt",
+        "key_path": "/home/kmt/opt/liberdus/ca.key"
     },
     "standalone_network": {
         "enabled":  true,
