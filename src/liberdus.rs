@@ -2,12 +2,11 @@
 use crate::{archivers, config};
 use reqwest;
 use serde_json;
-use serde;
+use serde::{self, Deserialize, Serialize};
 use rand::prelude::*;
-use std::{cmp::Ordering, collections::HashMap, sync::{atomic::{AtomicBool, AtomicUsize}, Arc}};
+use std::{cmp::Ordering, collections::HashMap, sync::{atomic::{AtomicBool, AtomicUsize}, Arc}, u128};
 use tokio::sync::RwLock;
 use crate::crypto;
-
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Clone)]
@@ -378,7 +377,6 @@ impl  Liberdus {
         });        
     }
 
-
     fn verify_signature(&self, signed_payload: &SignedNodeListResp) -> bool {
         let unsigned_msg = serde_json::json!({
             "nodeList": signed_payload.nodeList,
@@ -394,7 +392,90 @@ impl  Liberdus {
 
     }
 
+    pub async fn get_account_by_address(&self, address: &str) -> 
+        Result<serde_json::Value, std::io::Error> 
+    {
+        let node = match self.get_next_appropriate_consensor().await {
+            Some(n) => n.1,
+            None => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "No consensor available"));
+            }
+        };
+        let url = format!("http://{}:{}/account/{}", node.ip, node.port, address);
+        let account = match reqwest::get(&url).await {
+            Ok(r) => {
+                let parsed = match r.json::<GetAccountResp>().await {
+                    Ok(p) => {
+                        p.account
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to parse account: {}", e);
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to parse account"));
+                    }
+                };
+                parsed
+            },
+            Err(e) => {
+                eprintln!("Failed to get account: {}", e);
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to get account"));
+            }
+        };
+
+        return Ok(account);
+    }
+
 }
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct GetAccountResp{
+    account: serde_json::Value,
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserAccount {
+    pub alias: String,
+    pub claimed_snapshot: bool,
+    pub data: AccountData,
+    pub email_hash: Option<String>,
+    pub hash: String,
+    pub id: String,
+    pub last_maintenance: i64,
+    pub public_key: String,
+    pub timestamp: u128,
+    #[serde(rename = "type")]
+    pub account_type: String,
+    pub verified: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+    pub balance: BiData,
+    pub chat_timestamp: u128,
+    pub chats: HashMap<String, ChatRoomInfo>,
+    pub friends: HashMap<String, serde_json::Value>,
+    pub payments: Vec<serde_json::Value>,
+    pub remove_stake_request: Option<serde_json::Value>,
+    pub stake: BiData,
+    pub toll: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiData {
+    pub data_type: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatRoomInfo {
+    pub chat_id: String,
+    pub received_timestamp: u128,
+}
+
 
 
 // write tests

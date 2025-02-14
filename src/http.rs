@@ -16,55 +16,11 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 use tokio::net::TcpStream;
-use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
 use tokio::time::{timeout, Duration};
-use tokio_rustls::TlsStream;
-
-use crate::{liberdus, config};
-
-
-// Create a type alias for a unified stream type
-pub enum StreamWrapper {
-    Plain(TcpStream),
-    Tls(TlsStream<TcpStream>),
-}
-
-impl StreamWrapper {
-    pub async fn read(&mut self, buf: &mut [u8]) -> tokio::io::Result<usize> {
-        match self {
-            StreamWrapper::Plain(ref mut stream) => stream.read(buf).await,
-            StreamWrapper::Tls(ref mut stream) => Pin::new(stream).read(buf).await,
-        }
-    }
-
-    pub async fn write_all(&mut self, buf: &[u8]) -> tokio::io::Result<()> {
-        match self {
-            StreamWrapper::Plain(ref mut stream) => stream.write_all(buf).await,
-            StreamWrapper::Tls(ref mut stream) => {
-                    let mut pinned = Pin::new(stream);            
-                    let _ = pinned.write_all(buf).await;
-                    pinned.flush().await
-            },
-        }
-    }
-
-    pub async fn shutdown(&mut self) -> tokio::io::Result<()> {
-        match self {
-            StreamWrapper::Plain(ref mut stream) => stream.shutdown().await,
-            StreamWrapper::Tls(ref mut stream) => {
-                let mut pinned = Pin::new(stream);
-                // Ensure all data is written before shutting down
-                if let Err(e) = pinned.flush().await {
-                    eprintln!("Error flushing TLS stream: {}", e);
-                }
-                pinned.shutdown().await
-            }
-        }
-    }
-
-}
+use tokio_rustls::TlsAcceptor;
+use crate::{Stats, liberdus, config};
 
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -78,12 +34,14 @@ impl StreamWrapper {
 ///
 /// **No chunked encoding is supported.**
 /// **No Multiplexing is supported.**
-pub async fn handle_request(
+pub async fn handle_request<S>(
     request_buffer: Vec<u8>,
-    client_stream: &mut StreamWrapper,
+    client_stream: &mut S,
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>>
+where S: AsyncWrite + AsyncRead + Unpin + Send
+{
     // Get the next appropriate consensor from liberdus
     let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
         Some(consensor) => consensor,
@@ -98,8 +56,7 @@ pub async fn handle_request(
 
     let mut server_stream = match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), TcpStream::connect(ip_port)).await {
         Ok(Ok(stream)) => {
-            println!("Successfully connected to target server.");
-            StreamWrapper::Plain(stream)
+            stream
         },
         Ok(Err(e)) => {
             eprintln!("Error connecting to target server: {}", e);
@@ -118,7 +75,7 @@ pub async fn handle_request(
     let mut response_data = vec![];
     match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
         Ok(Ok(())) => {
-            match read_or_collect(&mut server_stream, &mut response_data).await {
+            match collect_http(&mut server_stream, &mut response_data).await {
                 Ok(()) => {
                     let elapsed = now.elapsed();
                     liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
@@ -190,7 +147,9 @@ pub async fn handle_request(
 
 /// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
-pub async fn read_or_collect(stream: &mut StreamWrapper, buffer: &mut Vec<u8>) -> Result<(), std::io::Error> {
+pub async fn collect_http<S>(stream: &mut S, buffer: &mut Vec<u8>) -> Result<(), std::io::Error>
+where S: AsyncRead + Unpin + Send
+{
     const TEMP_BUFFER_SIZE: usize = 1024;
     let mut temp_buffer = [0; TEMP_BUFFER_SIZE];
     let mut headers_read = false;
@@ -231,7 +190,7 @@ pub async fn read_or_collect(stream: &mut StreamWrapper, buffer: &mut Vec<u8>) -
         }
 
         // Optional: Limit the buffer size to prevent potential DoS attacks
-        const MAX_PAYLOAD_SIZE: usize = (1024 * 1024); // 1 MB
+        const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MB
         if buffer.len() > MAX_PAYLOAD_SIZE {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Payload too large"));
         }
@@ -241,14 +200,16 @@ pub async fn read_or_collect(stream: &mut StreamWrapper, buffer: &mut Vec<u8>) -
 }
 
 /// Outer loop to handle multiple HTTP requests from the same stream
-pub async fn handle_stream(
-    mut client_stream: StreamWrapper,
+pub async fn handle_stream<StreamLike>(
+    mut client_stream: StreamLike,
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>>
+where StreamLike: AsyncWrite + AsyncRead + Unpin + Send
+{
     loop {
         let mut req_buf = Vec::new();
-        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), read_or_collect(&mut client_stream, &mut req_buf)).await {
+        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), collect_http(&mut client_stream, &mut req_buf)).await {
             Ok(Ok(())) => {
 
                 if let Err(e) = handle_request(req_buf, &mut client_stream, liberdus.clone(), config.clone()).await {
@@ -325,14 +286,106 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
 }
 
 /// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
-async fn respond_with_internal_error(client_stream: &mut StreamWrapper) -> Result<(), std::io::Error> {
+async fn respond_with_internal_error<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where S: AsyncWrite + Unpin + Send
+{
     let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 
 /// Takes the stream, responds with a timeout error, and shutdown tcp
-async fn respond_with_timeout(client_stream: &mut StreamWrapper) -> Result<(), std::io::Error> {
+async fn respond_with_timeout<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where S: AsyncWrite + Unpin + Send
+{
     let response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 
+
+// without host
+pub fn get_route(buffer: &[u8]) -> Option<String> {
+    let mut route = None;
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        for line in buffer_str.lines() {
+            if let Some(value) = line.strip_prefix("GET ") {
+                let mut parts = value.split_whitespace();
+                if let Some(path) = parts.next() {
+                    route = Some(path.to_string());
+                    break;
+                }
+            }
+        }
+    }
+    route
+}
+
+
+pub async fn listen(
+    liberdus: Arc<liberdus::Liberdus>, 
+    config: Arc<config::Config>, 
+    server_stats: Arc<Stats>, 
+    tls_acceptor: Option<TlsAcceptor>
+) {
+    // let semaphore = Arc::new(Semaphore::new(300));
+
+    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port.clone())).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Error binding to port: {}", e);
+            std::process::exit(1);
+        }
+    };
+    println!("HTTP Listening on: {}", listener.local_addr().expect("Couldn't bind to a port"));
+
+    loop {
+        let (raw_stream, _) = match listener.accept().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                continue;
+            }
+        };
+
+
+        let liberdus = Arc::clone(&liberdus);
+        let config = Arc::clone(&config);
+        let stats = Arc::clone(&server_stats);
+        let tls_acceptor = match tls_acceptor.is_some() && config.tls.enabled {
+            true => Some(tls_acceptor.clone().unwrap()),
+            false => None,
+        };
+
+        tokio::spawn(async move {
+            // let permit = throttler.acquire().await.unwrap();
+            stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            
+
+            match tls_acceptor {
+                Some(tls_acceptor) => {
+                    match tls_acceptor.accept(raw_stream).await{
+                        Ok(tls_stream) => {
+                            let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                            let e = handle_stream(tls_stream, liberdus, config).await;
+                            if let Err(e) = e {
+                                eprintln!("Handle Stream Error: {}", e);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("TLS Handshake Error: {}", e);
+                            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                            return
+                        }
+                    }
+                },
+                None => {
+                    let e = handle_stream(raw_stream, liberdus, config).await;
+                    if let Err(e) = e {
+                        eprintln!("Handle Stream Error: {}", e);
+                    }
+                }
+            }
+            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        });
+
+    }
+}

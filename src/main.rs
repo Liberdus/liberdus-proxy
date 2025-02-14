@@ -42,11 +42,11 @@ mod archivers;
 mod crypto;
 mod config;
 mod tls;
+mod ws;
+mod subscription;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize};
-use tokio::net::TcpListener;
-use tokio::sync::Semaphore;
 use std::fs;
 use tokio_rustls::TlsAcceptor;
 
@@ -137,10 +137,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", _configs.http_port.clone())).await?;
-    println!("Listening on: {}", listener.local_addr()?);
-    let pid = std::process::id();
-    println!("PID: {}", pid);
 
     let config = Arc::new(_configs);
 
@@ -160,64 +156,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let liberdus_http = Arc::clone(&lbd);
+    let config_http = Arc::clone(&config);
+    let server_stats_http = Arc::clone(&server_stats);
+    let tls_http = tls_acceptor.clone();
 
-    // let semaphore = Arc::new(Semaphore::new(300));
 
-    loop {
-        // let throttler = Arc::clone(&semaphore);
-        let (raw_stream, _) = match listener.accept().await {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                continue;
-            }
-        };
+    let pid = std::process::id();
+    println!("PID: {}", pid);
 
-        // if semaphore.available_permits() == 0 {
-        //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        //     continue;
-        // }
+    let http_listener_task = tokio::spawn(async move {
+        http::listen(
+            liberdus_http,
+            config_http,
+            server_stats_http,
+            tls_http,
+        ).await;
+    });
 
-        let liberdus = Arc::clone(&lbd);
-        let config = Arc::clone(&config);
-        let stats = Arc::clone(&server_stats);
-        let tls_acceptor = match tls_acceptor.is_some() && config.tls.enabled {
-            true => Some(tls_acceptor.clone().unwrap()),
-            false => None,
-        };
+    let ws_liberdus = Arc::clone(&lbd);
+    let ws_config = Arc::clone(&config);
+    let ws_server_stats = Arc::clone(&server_stats);
+    let ws_tls = tls_acceptor.clone();
+    let websocket_listener_task = tokio::spawn(async move {
+        ws::listen(
+            ws_liberdus,
+            ws_config,
+            ws_server_stats,
+            ws_tls,
+        ).await;
+    });
 
-        tokio::spawn(async move {
-            // let permit = throttler.acquire().await.unwrap();
-            stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            
 
-            match tls_acceptor {
-                Some(tls_acceptor) => {
-                    match tls_acceptor.accept(raw_stream).await{
-                        Ok(tls_stream) => {
-                            let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                            let e = http::handle_stream(http::StreamWrapper::Tls(tls_stream), liberdus, config).await;
-                            if let Err(e) = e {
-                                eprintln!("Handle Stream Error: {}", e);
-                            }
-                        },
-                        Err(e) => {
-                            eprintln!("TLS Handshake Error: {}", e);
-                            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-                            return
-                        }
-                    }
-                },
-                None => {
-                    let e = http::handle_stream(http::StreamWrapper::Plain(raw_stream), liberdus, config).await;
-                    if let Err(e) = e {
-                        eprintln!("Handle Stream Error: {}", e);
-                    }
-                }
-            }
-            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-            // drop(permit);
-        });
+    tokio::try_join!(http_listener_task, websocket_listener_task)?;
 
-    }
+    Ok(())
+
 }
