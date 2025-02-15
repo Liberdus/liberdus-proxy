@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Consensor","Liberdus","Signature","SignedNodeListResp"]};
+window.SIDEBAR_ITEMS = {"struct":["AccountData","BiData","ChatRoomInfo","Consensor","GetAccountResp","Liberdus","Signature","SignedNodeListResp","UserAccount"]};

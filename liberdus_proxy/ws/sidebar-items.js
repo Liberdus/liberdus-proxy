@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Methods"],"fn":["generate_uuid","handle_stream","handle_subscriptions","listen"],"type":["SocketId","SocketIdents"]};
