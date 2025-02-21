@@ -44,9 +44,10 @@ mod config;
 mod tls;
 mod ws;
 mod subscription;
+mod shardus_monitor;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize};
+use std::sync::atomic::AtomicUsize;
 use std::fs;
 use tokio_rustls::TlsAcceptor;
 

@@ -1,11 +1,12 @@
 //! This module contains the node management logic require for load balancing with consensor nodes
-use crate::{archivers, config};
+use crate::{archivers, config, http};
+use tokio::io::{AsyncWriteExt, AsyncRead, AsyncWrite};
 use reqwest;
 use serde_json;
 use serde::{self, Deserialize, Serialize};
 use rand::prelude::*;
-use std::{cmp::Ordering, collections::HashMap, sync::{atomic::{AtomicBool, AtomicUsize}, Arc}, u128};
-use tokio::sync::RwLock;
+use std::{cmp::Ordering, collections::HashMap, sync::{atomic::{AtomicBool, AtomicUsize}, Arc}, time::Duration, u128};
+use tokio::{net::TcpStream, sync::RwLock, time::timeout};
 use crate::crypto;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -536,3 +537,125 @@ mod tests {
 
 
 
+/// Handles the client request stream by reading the request, forwarding it to a consensor server,
+/// collect the response from validator, and relaying it back to the client.
+/// Handles a single HTTP request from the client stream.
+/// This function assumes it processes only one http payload request.
+/// The proxy will maintain the tcp stream open for a specify amount of time to avoid the handshake
+/// overhead when the client do frequent calls.
+/// Proxy will not maintain tcp stream connected to upstream server/validator. It is always single
+/// use and always shutdown after the response is sent back to the client. If the multiple request
+/// from single client tcp stream, it is advisable to pick different validator each time.
+///
+/// **No chunked encoding is supported.**
+/// **No Multiplexing is supported.**
+pub async fn handle_request<S>(
+    request_buffer: Vec<u8>,
+    client_stream: &mut S,
+    liberdus: Arc<Liberdus>,
+    config: Arc<config::Config>,
+) -> Result<(), Box<dyn std::error::Error>>
+where S: AsyncWrite + AsyncRead + Unpin + Send
+{
+    // Get the next appropriate consensor from liberdus
+    let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
+        Some(consensor) => consensor,
+        None => {
+            eprintln!("No consensors available.");
+            http::respond_with_internal_error(client_stream).await?;
+            return Err("No consensors available".into());
+        }
+    };
+
+    let ip_port = format!("{}:{}", target_server.ip.clone(), target_server.port.clone());
+
+    let mut server_stream = match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), TcpStream::connect(ip_port)).await {
+        Ok(Ok(stream)) => {
+            stream
+        },
+        Ok(Err(e)) => {
+            eprintln!("Error connecting to target server: {}", e);
+            http::respond_with_timeout(client_stream).await?;
+            return Err(Box::new(e));
+        }
+        Err(_) => {
+            eprintln!("Timeout connecting to target server.");
+            http::respond_with_timeout(client_stream).await?;
+            return Err("Timeout connecting to target server".into());
+        }
+    };
+
+    // Forward the client's request to the server
+    let now = std::time::Instant::now();
+    let mut response_data = vec![];
+    match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), server_stream.write_all(&request_buffer)).await {
+        Ok(Ok(())) => {
+            match http::collect_http(&mut server_stream, &mut response_data).await {
+                Ok(()) => {
+                    let elapsed = now.elapsed();
+                    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                },
+                Err(e) => {
+                    eprintln!("Error reading response from server: {}", e);
+                    http::respond_with_internal_error(client_stream).await?;
+                    liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                    return Err(Box::new(e));
+                }
+            }
+
+
+        },
+        Ok(Err(e)) => {
+            eprintln!("Error forwarding request to server: {}", e);
+            http::respond_with_internal_error(client_stream).await?;
+            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err(Box::new(e));
+        }
+        Err(_) => {
+            eprintln!("Timeout forwarding request to server.");
+            http::respond_with_timeout(client_stream).await?;
+            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err("Timeout forwarding request to server".into());
+        }
+    }
+    println!("Successfully forwarded request to server.");
+
+    drop(request_buffer);
+
+    if response_data.is_empty() {
+        eprintln!("Empty response from server.");
+        http::respond_with_internal_error(client_stream).await?;
+        return Err("Empty response from server".into());
+    }
+
+
+    http::set_http_header(&mut response_data, "Connection", "keep-alive");
+    http::set_http_header(&mut response_data, "Keep-Alive", format!("timeout={}", config.tcp_keepalive_time_sec).as_str());
+    http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+
+
+    // Relay the collected response to the client
+    if let Err(e) = client_stream.write_all(&response_data).await {
+        eprintln!("Error relaying response to client: {}", e);
+        http::respond_with_internal_error(client_stream).await?;
+        return Err(Box::new(e));
+    }
+
+    Ok(())
+}
