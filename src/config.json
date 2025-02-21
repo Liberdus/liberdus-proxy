@@ -14,5 +14,11 @@
     "standalone_network": {
         "enabled":  true,
         "replacement_ip": "63.141.233.178"
+    },
+    "shardus_monitor": {
+        "enabled": true,
+        "upstream_ip": "dev.liberdus.com",
+        "upstream_port": 3000,
+        "https": false
     }
 }
