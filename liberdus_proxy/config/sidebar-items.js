@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Config","StandaloneNetworkConfig","TLSConfig"]};
+window.SIDEBAR_ITEMS = {"struct":["Config","ShardusMonitorProxyConfig","StandaloneNetworkConfig","TLSConfig"]};

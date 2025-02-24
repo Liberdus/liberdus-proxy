@@ -193,6 +193,7 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
 //! 
@@ -239,9 +240,10 @@
 <span class="kw">mod </span>tls;
 <span class="kw">mod </span>ws;
 <span class="kw">mod </span>subscription;
+<span class="kw">mod </span>shardus_monitor;
 
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::sync::atomic::{AtomicUsize};
+<span class="kw">use </span>std::sync::atomic::AtomicUsize;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
 

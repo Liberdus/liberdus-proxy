@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["collect_http","get_route","handle_request","handle_stream","listen","parse_content_length","respond_with_internal_error","respond_with_timeout","set_http_header"]};
+window.SIDEBAR_ITEMS = {"fn":["collect_http","extract_body","get_route","handle_stream","listen","parse_content_length","respond_with_internal_error","respond_with_timeout","set_http_header"]};

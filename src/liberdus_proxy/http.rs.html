@@ -295,100 +295,6 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -407,134 +313,14 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 </span><span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span>tokio::sync::RwLock;
+<span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
 <span class="kw">use </span>tokio::time::{timeout, Duration};
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
-<span class="kw">use crate</span>::{Stats, liberdus, config};
+<span class="kw">use crate</span>::{Stats, liberdus, config, shardus_monitor};
 
-<span class="doccomment">/// Handles the client request stream by reading the request, forwarding it to a consensor server,
-/// collect the response from validator, and relaying it back to the client.
-/// Handles a single HTTP request from the client stream.
-/// This function assumes it processes only one http payload request.
-/// The proxy will maintain the tcp stream open for a specify amount of time to avoid the handshake
-/// overhead when the client do frequent calls.
-/// Proxy will not maintain tcp stream connected to upstream server/validator. It is always single
-/// use and always shutdown after the response is sent back to the client. If the multiple request
-/// from single client tcp stream, it is advisable to pick different validator each time.
-///
-/// **No chunked encoding is supported.**
-/// **No Multiplexing is supported.**
-</span><span class="kw">pub async fn </span>handle_request&lt;S&gt;(
-    request_buffer: Vec&lt;u8&gt;,
-    client_stream: <span class="kw-2">&amp;mut </span>S,
-    liberdus: Arc&lt;liberdus::Liberdus&gt;,
-    config: Arc&lt;config::Config&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
-<span class="kw">where </span>S: AsyncWrite + AsyncRead + Unpin + Send
-{
-    <span class="comment">// Get the next appropriate consensor from liberdus
-    </span><span class="kw">let </span>(<span class="kw">_</span>, target_server) = <span class="kw">match </span>liberdus.get_next_appropriate_consensor().<span class="kw">await </span>{
-        <span class="prelude-val">Some</span>(consensor) =&gt; consensor,
-        <span class="prelude-val">None </span>=&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"No consensors available."</span>);
-            respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"No consensors available"</span>.into());
-        }
-    };
-
-    <span class="kw">let </span>ip_port = <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, target_server.ip.clone(), target_server.port.clone());
-
-    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), TcpStream::connect(ip_port)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; {
-            stream
-        },
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Error connecting to target server: {}"</span>, e);
-            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-        }
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Timeout connecting to target server."</span>);
-            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Timeout connecting to target server"</span>.into());
-        }
-    };
-
-    <span class="comment">// Forward the client's request to the server
-    </span><span class="kw">let </span>now = std::time::Instant::now();
-    <span class="kw">let </span><span class="kw-2">mut </span>response_data = <span class="macro">vec!</span>[];
-    <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), server_stream.write_all(<span class="kw-2">&amp;</span>request_buffer)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-            <span class="kw">match </span>collect_http(<span class="kw-2">&amp;mut </span>server_stream, <span class="kw-2">&amp;mut </span>response_data).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    <span class="kw">let </span>elapsed = now.elapsed();
-                    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">eprintln!</span>(<span class="string">"Error reading response from server: {}"</span>, e);
-                    respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-                    liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-                }
-            }
-
-
-        },
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Error forwarding request to server: {}"</span>, e);
-            respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-            tokio::spawn(<span class="kw">async move </span>{
-                server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                drop(server_stream);
-            });
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-        }
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Timeout forwarding request to server."</span>);
-            respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-            tokio::spawn(<span class="kw">async move </span>{
-                server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                drop(server_stream);
-            });
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Timeout forwarding request to server"</span>.into());
-        }
-    }
-    <span class="macro">println!</span>(<span class="string">"Successfully forwarded request to server."</span>);
-
-    drop(request_buffer);
-
-    <span class="kw">if </span>response_data.is_empty() {
-        <span class="macro">eprintln!</span>(<span class="string">"Empty response from server."</span>);
-        respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Empty response from server"</span>.into());
-    }
-
-
-    set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Connection"</span>, <span class="string">"keep-alive"</span>);
-    set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Keep-Alive"</span>, <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str());
-    set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Access-Control-Allow-Origin"</span>, <span class="string">"*"</span>);
-
-
-    <span class="comment">// Relay the collected response to the client
-    </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_stream.write_all(<span class="kw-2">&amp;</span>response_data).<span class="kw">await </span>{
-        <span class="macro">eprintln!</span>(<span class="string">"Error relaying response to client: {}"</span>, e);
-        respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-    }
-
-    <span class="prelude-val">Ok</span>(())
-}
 
 <span class="doccomment">/// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
@@ -602,10 +388,26 @@
         <span class="kw">let </span><span class="kw-2">mut </span>req_buf = Vec::new();
         <span class="kw">match </span>timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), collect_http(<span class="kw-2">&amp;mut </span>client_stream, <span class="kw-2">&amp;mut </span>req_buf)).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
+                <span class="kw">let </span>route = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap_or(<span class="string">"/"</span>.to_string());
 
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, liberdus.clone(), config.clone()).<span class="kw">await </span>{
-                    <span class="macro">eprintln!</span>(<span class="string">"Error handling request: {}"</span>, e);
+                <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(<span class="kw-2">&amp;</span>route) {
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
+                        req_buf, 
+                        route,
+                        <span class="kw-2">&amp;mut </span>client_stream, 
+                        config.clone()
+                        ).<span class="kw">await </span>{
+                        <span class="macro">eprintln!</span>(<span class="string">"Error handling monitor request: {}"</span>, e);
+                    }
+
                 }
+                <span class="kw">else</span>{
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, liberdus.clone(), config.clone()).<span class="kw">await </span>{
+                        <span class="macro">eprintln!</span>(<span class="string">"Error handling liberdus request: {}"</span>, e);
+                    }
+                }
+
+
             }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error attempting to read bytes out of client stream: {}"</span>, e);
@@ -677,7 +479,7 @@
 </span>}
 
 <span class="doccomment">/// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
-</span><span class="kw">async fn </span>respond_with_internal_error&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
+</span><span class="kw">pub async fn </span>respond_with_internal_error&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
 <span class="kw">where </span>S: AsyncWrite + Unpin + Send
 {
     <span class="kw">let </span>response = <span class="string">"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
@@ -685,7 +487,7 @@
 </span>}
 
 <span class="doccomment">/// Takes the stream, responds with a timeout error, and shutdown tcp
-</span><span class="kw">async fn </span>respond_with_timeout&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
+</span><span class="kw">pub async fn </span>respond_with_timeout&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
 <span class="kw">where </span>S: AsyncWrite + Unpin + Send
 {
     <span class="kw">let </span>response = <span class="string">"HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
@@ -779,5 +581,15 @@
         });
 
     }
+}
+
+<span class="kw">pub fn </span>extract_body(buffer: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>body = Vec::new();
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(buffer_str) = std::str::from_utf8(buffer) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(body_start) = buffer_str.find(<span class="string">"\r\n\r\n"</span>) {
+            body.extend_from_slice(<span class="kw-2">&amp;</span>buffer[body_start + <span class="number">4</span>..]);
+        }
+    }
+    body
 }
 </code></pre></div></section></main></body></html>
