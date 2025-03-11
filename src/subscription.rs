@@ -35,7 +35,7 @@ pub struct SubscriptionResponse {
 type UserAccountAddress = String;
 type Timestamp = u128;
 
-pub struct Manager{
+pub struct Manager {
     states: Arc<RwLock<Inner>>,
     liberdus: Arc<liberdus::Liberdus>,
     socket_map: ws::SocketIdents,
@@ -63,11 +63,17 @@ impl Manager {
 
     async fn set_states(&self, addr: UserAccountAddress, socket_id: &ws::SocketId) {
         let mut guard = self.states.write().await;
-        
-        let subs = guard.accounts_by_sock.entry(socket_id.clone()).or_insert(HashSet::new());
+
+        let subs = guard
+            .accounts_by_sock
+            .entry(socket_id.clone())
+            .or_insert(HashSet::new());
         subs.insert(addr.clone());
 
-        let sockets = guard.socks_by_account.entry(addr.clone()).or_insert(HashSet::new());
+        let sockets = guard
+            .socks_by_account
+            .entry(addr.clone())
+            .or_insert(HashSet::new());
         sockets.insert(socket_id.clone());
 
         guard.last_received.entry(addr.clone()).or_insert(0);
@@ -82,9 +88,8 @@ impl Manager {
                 if a.is_empty() {
                     guard.accounts_by_sock.remove(socket_id);
                 }
-            },
-            _ => {
             }
+            _ => {}
         }
 
         match guard.socks_by_account.get_mut(&addr) {
@@ -94,13 +99,9 @@ impl Manager {
                     guard.socks_by_account.remove(&addr);
                     guard.last_received.remove(&addr);
                 }
-            },
-            _ => {
             }
+            _ => {}
         }
-
-
-        
     }
 
     async fn is_exist(&self, addr: &UserAccountAddress, sock_id: &String) -> bool {
@@ -108,15 +109,12 @@ impl Manager {
 
         let accounts = match guard.accounts_by_sock.get(sock_id) {
             Some(a) => a.contains(addr),
-            None => {
-                false
-            }
+            None => false,
         };
 
         drop(guard);
 
         accounts
-
     }
 
     pub async fn unsubscribe_all(&self, socket_id: &ws::SocketId) {
@@ -141,10 +139,14 @@ impl Manager {
         // println!("{:?}", self.states.read().await);
     }
 
-    pub async fn discover(&self)  {
+    pub async fn discover(&self) {
         let read_guard = self.states.read().await;
 
-        let accounts = read_guard.socks_by_account.keys().cloned().collect::<Vec<UserAccountAddress>>();
+        let accounts = read_guard
+            .socks_by_account
+            .keys()
+            .cloned()
+            .collect::<Vec<UserAccountAddress>>();
 
         drop(read_guard);
 
@@ -153,7 +155,6 @@ impl Manager {
         if accounts.is_empty() {
             return;
         }
-
 
         for address in accounts {
             let liberdus = Arc::clone(&self.liberdus);
@@ -181,9 +182,7 @@ impl Manager {
                 let guard = states.read().await;
 
                 let old_timestamp = match guard.last_received.get(&address) {
-                    Some(t) => {
-                        t.clone()
-                    },
+                    Some(t) => t.clone(),
                     None => {
                         // todo purge this address from all entries
                         drop(guard);
@@ -192,7 +191,6 @@ impl Manager {
                 };
 
                 drop(guard);
-
 
                 if old_timestamp == 0 && new_timestamp > old_timestamp {
                     let mut guard = states.write().await;
@@ -205,13 +203,18 @@ impl Manager {
                 }
 
                 if new_timestamp > old_timestamp {
-                    let sockets = states.read().await.socks_by_account.get(&address).unwrap_or(&HashSet::new()).clone();
+                    let sockets = states
+                        .read()
+                        .await
+                        .socks_by_account
+                        .get(&address)
+                        .unwrap_or(&HashSet::new())
+                        .clone();
 
                     let event = SubscriptionEvent {
                         account_id: address.clone(),
                         timestamp: new_timestamp,
                     };
-
 
                     let tx = tx.clone();
                     let msg = Message::Text(serde_json::to_string(&event).unwrap().into());
@@ -225,17 +228,13 @@ impl Manager {
                     drop(guard);
 
                     for socket in sockets {
-
-                        tx.clone().send((socket.clone(), msg.clone())).expect("Failed to send message");
-
-
+                        tx.clone()
+                            .send((socket.clone(), msg.clone()))
+                            .expect("Failed to send message");
                     }
-
                 }
-
             });
         }
-
 
         drop(tx);
         while let Some((sock_id, msg)) = rx.recv().await {
@@ -252,30 +251,26 @@ impl Manager {
                 self.unsubscribe_all(&sock_id).await;
             }
         }
-
     }
 
     pub async fn subscribe(&self, socket_id: &ws::SocketId, address: &str) -> bool {
         match self.is_exist(&address.to_string(), &socket_id).await {
             true => {
                 return false;
-            },
+            }
             false => {
                 self.set_states(address.to_string(), socket_id).await;
                 return true;
             }
         }
-    
     }
 
-    pub async fn unsubscribe(&self, socket_id: &ws::SocketId, address: &str) -> bool  {
+    pub async fn unsubscribe(&self, socket_id: &ws::SocketId, address: &str) -> bool {
         let guard = self.states.read().await;
 
         let accounts = match guard.accounts_by_sock.get(socket_id) {
             Some(a) => a.contains(&address.to_string()),
-            None => {
-                false
-            }
+            None => false,
         };
 
         drop(guard);
@@ -286,12 +281,5 @@ impl Manager {
         }
 
         false
-
     }
-
-
-    
-
 }
-
-

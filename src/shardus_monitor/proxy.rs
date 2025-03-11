@@ -1,6 +1,13 @@
-use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, sync::RwLock};
 use crate::{config, http, liberdus::Liberdus};
-use std::{collections::HashMap, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    sync::RwLock,
+};
 use tokio::{net::TcpStream, time::timeout};
 /// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -20,9 +27,9 @@ pub async fn handle_request<S>(
     client_stream: &mut S,
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>>
-where S: AsyncWrite + AsyncRead + Unpin + Send
+where
+    S: AsyncWrite + AsyncRead + Unpin + Send,
 {
-
     let cache_map = CACHE_MAP.get_or_init(init_caches);
 
     let cache = cache_map.get(&route).unwrap().read().await;
@@ -31,14 +38,22 @@ where S: AsyncWrite + AsyncRead + Unpin + Send
 
     drop(cache);
 
-
     // Forward the client's request to the server
     let mut response_data = {
-        let date_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        let date_now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         if payload.buffer.is_none() || (date_now - payload.timestamp) > payload.lifespan as u128 {
             println!("Cold fetch for route: {}", route);
             let mut server_resp_buffer = Vec::new();
-            cold_fetch(client_stream, &mut server_resp_buffer, config.clone(), route.as_str()).await?;
+            cold_fetch(
+                client_stream,
+                &mut server_resp_buffer,
+                config.clone(),
+                route.as_str(),
+            )
+            .await?;
 
             if route == "/api/report" {
                 let body = http::extract_body(&server_resp_buffer);
@@ -50,24 +65,37 @@ where S: AsyncWrite + AsyncRead + Unpin + Send
                         return Err(Box::new(e));
                     }
                 };
-        
+
                 for (_, node) in report.nodes.active.iter_mut() {
-                    node.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                    node.timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis();
                     node.reportInterval = payload.lifespan;
                 }
-                   
+
                 for (_, node) in report.nodes.syncing.iter_mut() {
-                    node.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                    node.timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis();
                 }
-                   
-                report.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-        
+
+                report.timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+
                 server_resp_buffer = serde_json::to_vec(&report).unwrap();
             };
 
-            cache_map.get(&route).unwrap().write().await.set(server_resp_buffer.clone());
+            cache_map
+                .get(&route)
+                .unwrap()
+                .write()
+                .await
+                .set(server_resp_buffer.clone());
             server_resp_buffer
-
         } else {
             payload.buffer.unwrap()
         }
@@ -79,18 +107,19 @@ where S: AsyncWrite + AsyncRead + Unpin + Send
     //     route
     // };
 
-
     if response_data.is_empty() {
         eprintln!("Empty response from server.");
         http::respond_with_internal_error(client_stream).await?;
         return Err("Empty response from server".into());
     }
 
-
     http::set_http_header(&mut response_data, "Connection", "keep-alive");
-    http::set_http_header(&mut response_data, "Keep-Alive", format!("timeout={}", config.tcp_keepalive_time_sec).as_str());
+    http::set_http_header(
+        &mut response_data,
+        "Keep-Alive",
+        format!("timeout={}", config.tcp_keepalive_time_sec).as_str(),
+    );
     http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
-
 
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
@@ -124,20 +153,24 @@ pub fn is_monitor_route(route: &str) -> bool {
 }
 
 async fn cold_fetch<S>(
-    client_stream: &mut S, 
+    client_stream: &mut S,
     server_resp_buffer: &mut Vec<u8>,
-    config: Arc<config::Config>, 
-    route: &str, 
+    config: Arc<config::Config>,
+    route: &str,
 ) -> Result<(), Box<dyn std::error::Error>>
-where S: AsyncRead + AsyncWrite + Unpin + Send
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send,
 {
     let upstream_ip = config.shardus_monitor.upstream_ip.clone();
     let upstream_port = config.shardus_monitor.upstream_port.clone();
     let ip_port = format!("{}:{}", upstream_ip, upstream_port);
-    let mut server_stream = match timeout(Duration::from_millis(config.max_http_timeout_ms as u64), TcpStream::connect(ip_port)).await {
-        Ok(Ok(stream)) => {
-            stream
-        },
+    let mut server_stream = match timeout(
+        Duration::from_millis(config.max_http_timeout_ms as u64),
+        TcpStream::connect(ip_port),
+    )
+    .await
+    {
+        Ok(Ok(stream)) => stream,
         Ok(Err(e)) => {
             eprintln!("Error connecting to target server: {}", e);
             http::respond_with_timeout(client_stream).await?;
@@ -150,35 +183,35 @@ where S: AsyncRead + AsyncWrite + Unpin + Send
         }
     };
 
-
     let emulated_request = format!(
         "GET {} HTTP/1.1\r\nHost: {}:{}\r\n\r\n",
-        route,
-        upstream_ip,
-        upstream_port
-    ).into_bytes().to_vec();
+        route, upstream_ip, upstream_port
+    )
+    .into_bytes()
+    .to_vec();
 
-    match timeout(Duration::from_millis((config.max_http_timeout_ms * 2) as u64), server_stream.write_all(&emulated_request)).await {
-        Ok(Ok(())) => {
-            match http::collect_http(&mut server_stream, server_resp_buffer).await {
-                Ok(()) => {
-                    tokio::spawn(async move {
-                        server_stream.shutdown().await.unwrap();
-                        drop(server_stream);
-                    });
-                },
-                Err(e) => {
-                    eprintln!("Error reading response from server: {}", e);
-                    http::respond_with_internal_error(client_stream).await?;
-                    tokio::spawn(async move {
-                        server_stream.shutdown().await.unwrap();
-                        drop(server_stream);
-                    });
-                    return Err(Box::new(e));
-                }
+    match timeout(
+        Duration::from_millis((config.max_http_timeout_ms * 2) as u64),
+        server_stream.write_all(&emulated_request),
+    )
+    .await
+    {
+        Ok(Ok(())) => match http::collect_http(&mut server_stream, server_resp_buffer).await {
+            Ok(()) => {
+                tokio::spawn(async move {
+                    server_stream.shutdown().await.unwrap();
+                    drop(server_stream);
+                });
             }
-
-
+            Err(e) => {
+                eprintln!("Error reading response from server: {}", e);
+                http::respond_with_internal_error(client_stream).await?;
+                tokio::spawn(async move {
+                    server_stream.shutdown().await.unwrap();
+                    drop(server_stream);
+                });
+                return Err(Box::new(e));
+            }
         },
         Ok(Err(e)) => {
             eprintln!("Error forwarding request to server: {}", e);
@@ -219,7 +252,10 @@ impl PayloadCache {
     }
     pub fn set(&mut self, payload: Vec<u8>) {
         self.buffer = Some(payload);
-        self.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
     }
 
     pub fn get(&self) -> PayloadCache {
@@ -231,33 +267,70 @@ impl PayloadCache {
     }
 }
 
-type PayloadCacheMap = Arc<
-    std::collections::HashMap<String, tokio::sync::RwLock<PayloadCache>>
->;
+type PayloadCacheMap = Arc<std::collections::HashMap<String, tokio::sync::RwLock<PayloadCache>>>;
 
-    
 fn init_caches() -> PayloadCacheMap {
-        let mut map: HashMap<String, RwLock<PayloadCache>> = HashMap::new();
-        let one_minute = 60000;
+    let mut map: HashMap<String, RwLock<PayloadCache>> = HashMap::new();
+    let one_minute = 60000;
 
-        map.insert("/style.css".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/app.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/version.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/fabric.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/auth.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/favicon.ico".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/axios.min.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/popmotion.min.js".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/api/report".to_string(), RwLock::new(PayloadCache::new(one_minute * 2)));
-        map.insert("/api/status".to_string(), RwLock::new(PayloadCache::new(one_minute * 2)));
-        map.insert("/api/version".to_string(), RwLock::new(PayloadCache::new(one_minute * 2)));
-        map.insert("/milky-way2.png".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/logo.png".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
-        map.insert("/".to_string(), RwLock::new(PayloadCache::new(one_minute * 30)));
+    map.insert(
+        "/style.css".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/app.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/version.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/fabric.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/auth.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/favicon.ico".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/axios.min.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/popmotion.min.js".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/api/report".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 2)),
+    );
+    map.insert(
+        "/api/status".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 2)),
+    );
+    map.insert(
+        "/api/version".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 2)),
+    );
+    map.insert(
+        "/milky-way2.png".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/logo.png".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
+    map.insert(
+        "/".to_string(),
+        RwLock::new(PayloadCache::new(one_minute * 30)),
+    );
 
-        Arc::new(map)
-
+    Arc::new(map)
 }
 
 pub static CACHE_MAP: std::sync::OnceLock<PayloadCacheMap> = std::sync::OnceLock::new();
-

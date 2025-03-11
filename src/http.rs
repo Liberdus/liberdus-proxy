@@ -15,20 +15,20 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use tokio::net::TcpStream;
-use tokio::sync::RwLock;
+use crate::{config, liberdus, shardus_monitor, Stats};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsAcceptor;
-use crate::{Stats, liberdus, config, shardus_monitor};
-
 
 /// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
 pub async fn collect_http<S>(stream: &mut S, buffer: &mut Vec<u8>) -> Result<(), std::io::Error>
-where S: AsyncRead + Unpin + Send
+where
+    S: AsyncRead + Unpin + Send,
 {
     const TEMP_BUFFER_SIZE: usize = 1024;
     let mut temp_buffer = [0; TEMP_BUFFER_SIZE];
@@ -40,7 +40,10 @@ where S: AsyncRead + Unpin + Send
         let n = stream.read(&mut temp_buffer).await?;
         if n == 0 {
             if !headers_read {
-                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Stream closed"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Stream closed",
+                ));
             }
             break; // Stream closed
         }
@@ -63,7 +66,11 @@ where S: AsyncRead + Unpin + Send
 
         // Stop reading if content length is known and body is fully read
         if let Some(length) = content_length {
-            let body_start = buffer.windows(4).position(|w| w == b"\r\n\r\n").unwrap_or(0) + 4;
+            let body_start = buffer
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+                .unwrap_or(0)
+                + 4;
             if buffer.len() >= body_start + length {
                 break;
             }
@@ -72,7 +79,10 @@ where S: AsyncRead + Unpin + Send
         // Optional: Limit the buffer size to prevent potential DoS attacks
         const MAX_PAYLOAD_SIZE: usize = 1024 * 1024; // 1 MB
         if buffer.len() > MAX_PAYLOAD_SIZE {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Payload too large"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Payload too large",
+            ));
         }
     }
 
@@ -85,32 +95,43 @@ pub async fn handle_stream<StreamLike>(
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>>
-where StreamLike: AsyncWrite + AsyncRead + Unpin + Send
+where
+    StreamLike: AsyncWrite + AsyncRead + Unpin + Send,
 {
     loop {
         let mut req_buf = Vec::new();
-        match timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), collect_http(&mut client_stream, &mut req_buf)).await {
+        match timeout(
+            Duration::from_secs(config.tcp_keepalive_time_sec.into()),
+            collect_http(&mut client_stream, &mut req_buf),
+        )
+        .await
+        {
             Ok(Ok(())) => {
                 let route = get_route(&req_buf).unwrap_or("/".to_string());
 
                 if shardus_monitor::proxy::is_monitor_route(&route) {
                     if let Err(e) = shardus_monitor::proxy::handle_request(
-                        req_buf, 
+                        req_buf,
                         route,
-                        &mut client_stream, 
-                        config.clone()
-                        ).await {
+                        &mut client_stream,
+                        config.clone(),
+                    )
+                    .await
+                    {
                         eprintln!("Error handling monitor request: {}", e);
                     }
-
-                }
-                else{
-                    if let Err(e) = liberdus::handle_request(req_buf, &mut client_stream, liberdus.clone(), config.clone()).await {
+                } else {
+                    if let Err(e) = liberdus::handle_request(
+                        req_buf,
+                        &mut client_stream,
+                        liberdus.clone(),
+                        config.clone(),
+                    )
+                    .await
+                    {
                         eprintln!("Error handling liberdus request: {}", e);
                     }
                 }
-
-
             }
             Ok(Err(e)) => {
                 eprintln!("Error attempting to read bytes out of client stream: {}", e);
@@ -121,15 +142,11 @@ where StreamLike: AsyncWrite + AsyncRead + Unpin + Send
                 break;
             }
         }
-
     }
 
-
     match client_stream.shutdown().await {
-        Ok(_) => {Ok(())},
-        Err(_e) => {
-            Ok(())
-        }
+        Ok(_) => Ok(()),
+        Err(_e) => Ok(()),
     }
 }
 
@@ -139,7 +156,10 @@ pub fn set_http_header(buffer: &mut Vec<u8>, key: &str, value: &str) {
         // Locate the end of the headers
         if let Some(headers_end) = buffer_str.find("\r\n\r\n") {
             // Collect headers as a vector of Strings
-            let mut headers: Vec<String> = buffer_str[..headers_end].lines().map(String::from).collect();
+            let mut headers: Vec<String> = buffer_str[..headers_end]
+                .lines()
+                .map(String::from)
+                .collect();
             let header_prefix = format!("{}:", key);
             let mut found = false;
 
@@ -183,20 +203,22 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
 
 /// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
 pub async fn respond_with_internal_error<S>(client_stream: &mut S) -> Result<(), std::io::Error>
-where S: AsyncWrite + Unpin + Send
+where
+    S: AsyncWrite + Unpin + Send,
 {
-    let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let response =
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 
 /// Takes the stream, responds with a timeout error, and shutdown tcp
 pub async fn respond_with_timeout<S>(client_stream: &mut S) -> Result<(), std::io::Error>
-where S: AsyncWrite + Unpin + Send
+where
+    S: AsyncWrite + Unpin + Send,
 {
     let response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
-
 
 // without host
 pub fn get_route(buffer: &[u8]) -> Option<String> {
@@ -215,23 +237,30 @@ pub fn get_route(buffer: &[u8]) -> Option<String> {
     route
 }
 
-
 pub async fn listen(
-    liberdus: Arc<liberdus::Liberdus>, 
-    config: Arc<config::Config>, 
-    server_stats: Arc<Stats>, 
-    tls_acceptor: Option<TlsAcceptor>
+    liberdus: Arc<liberdus::Liberdus>,
+    config: Arc<config::Config>,
+    server_stats: Arc<Stats>,
+    tls_acceptor: Option<TlsAcceptor>,
 ) {
     // let semaphore = Arc::new(Semaphore::new(300));
 
-    let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port.clone())).await {
+    let listener = match tokio::net::TcpListener::bind(format!(
+        "0.0.0.0:{}",
+        config.http_port.clone()
+    ))
+    .await
+    {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Error binding to port: {}", e);
             std::process::exit(1);
         }
     };
-    println!("HTTP Listening on: {}", listener.local_addr().expect("Couldn't bind to a port"));
+    println!(
+        "HTTP Listening on: {}",
+        listener.local_addr().expect("Couldn't bind to a port")
+    );
 
     loop {
         let (raw_stream, _) = match listener.accept().await {
@@ -241,7 +270,6 @@ pub async fn listen(
                 continue;
             }
         };
-
 
         let liberdus = Arc::clone(&liberdus);
         let config = Arc::clone(&config);
@@ -253,24 +281,25 @@ pub async fn listen(
 
         tokio::spawn(async move {
             // let permit = throttler.acquire().await.unwrap();
-            stats.stream_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            
+            stats
+                .stream_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             match tls_acceptor {
-                Some(tls_acceptor) => {
-                    match tls_acceptor.accept(raw_stream).await{
-                        Ok(tls_stream) => {
-                            let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                            let e = handle_stream(tls_stream, liberdus, config).await;
-                            if let Err(e) = e {
-                                eprintln!("Handle Stream Error: {}", e);
-                            }
-                        },
-                        Err(e) => {
-                            eprintln!("TLS Handshake Error: {}", e);
-                            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
-                            return
+                Some(tls_acceptor) => match tls_acceptor.accept(raw_stream).await {
+                    Ok(tls_stream) => {
+                        let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                        let e = handle_stream(tls_stream, liberdus, config).await;
+                        if let Err(e) = e {
+                            eprintln!("Handle Stream Error: {}", e);
                         }
+                    }
+                    Err(e) => {
+                        eprintln!("TLS Handshake Error: {}", e);
+                        stats
+                            .stream_count
+                            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                        return;
                     }
                 },
                 None => {
@@ -280,9 +309,10 @@ pub async fn listen(
                     }
                 }
             }
-            stats.stream_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            stats
+                .stream_count
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         });
-
     }
 }
 

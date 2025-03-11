@@ -1,10 +1,9 @@
 //! Configuration for the rpc server.
-use std::fs;
 use serde;
+use std::fs;
 
-#[derive(Debug, serde::Deserialize)]
-#[derive(Clone)]
-pub struct Config{
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct Config {
     /// The port on which the proxy server will listen
     pub http_port: u16,
 
@@ -36,8 +35,7 @@ pub struct Config{
     pub shardus_monitor: ShardusMonitorProxyConfig,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[derive(Clone)]
+#[derive(Debug, serde::Deserialize, Clone)]
 /// Standalone network mean that consensus node and archivers reside within same server.
 /// This mean archiver will returns node list with loopback ip address 0.0.0.0, 127.0.0.1, localhost.
 /// When rpc is on a separate machine, loopback ips of nodes will not work.
@@ -47,8 +45,7 @@ pub struct StandaloneNetworkConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[derive(Clone)]
+#[derive(Debug, serde::Deserialize, Clone)]
 /// TLS configuration
 pub struct TLSConfig {
     pub enabled: bool,
@@ -56,8 +53,7 @@ pub struct TLSConfig {
     pub key_path: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[derive(Clone)]
+#[derive(Debug, serde::Deserialize, Clone)]
 pub struct ShardusMonitorProxyConfig {
     pub enabled: bool,
     pub upstream_ip: String,
@@ -77,7 +73,4 @@ impl Config {
         serde_json::from_str(&config_data)
             .map_err(|err| format!("Failed to parse config file: {}", err))
     }
-
 }
-
-
