@@ -17,8 +17,12 @@
     },
     "shardus_monitor": {
         "enabled": true,
-        "upstream_ip": "dev.liberdus.com",
+        "upstream_ip": "test.liberdus.com",
         "upstream_port": 3000,
         "https": false
+    },
+    "local_source": {
+        "collector_api_ip":"0.0.0.0",
+        "collector_api_port":6101
     }
 }

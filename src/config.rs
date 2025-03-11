@@ -33,6 +33,8 @@ pub struct Config {
     pub tls: TLSConfig,
 
     pub shardus_monitor: ShardusMonitorProxyConfig,
+
+    pub local_source: LocalSource,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -59,6 +61,12 @@ pub struct ShardusMonitorProxyConfig {
     pub upstream_ip: String,
     pub upstream_port: u16,
     pub https: bool,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct LocalSource {
+    pub collector_api_ip: String,
+    pub collector_api_port: u16,
 }
 
 /// Load the configuration from the config json file

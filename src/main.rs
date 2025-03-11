@@ -45,6 +45,7 @@ mod shardus_monitor;
 mod subscription;
 mod tls;
 mod ws;
+mod collector;
 
 use std::fs;
 use std::sync::atomic::AtomicUsize;
