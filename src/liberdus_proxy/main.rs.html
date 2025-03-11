@@ -177,6 +177,7 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
 //!
@@ -224,6 +225,7 @@
 <span class="kw">mod </span>subscription;
 <span class="kw">mod </span>tls;
 <span class="kw">mod </span>ws;
+<span class="kw">mod </span>collector;
 
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::sync::atomic::AtomicUsize;

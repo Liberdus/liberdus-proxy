@@ -738,9 +738,24 @@
 <a href="#738" id="738">738</a>
 <a href="#739" id="739">739</a>
 <a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
 </span><span class="kw">use </span><span class="kw">crate</span>::crypto;
-<span class="kw">use crate</span>::{archivers, config, http};
+<span class="kw">use crate</span>::{archivers, config, http, collector};
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>reqwest;
 <span class="kw">use </span>serde::{<span class="self">self</span>, Deserialize, Serialize};
@@ -1185,9 +1200,24 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         address: <span class="kw-2">&amp;</span>str,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, std::io::Error&gt; {
+        <span class="kw">let </span>collecotr_ip = <span class="self">self</span>.config.local_source.collector_api_ip.clone();
+        <span class="kw">let </span>collector_port = <span class="self">self</span>.config.local_source.collector_api_port.clone().to_string();
+
+        <span class="kw">let </span>account = collector::get_account_by_address(
+            <span class="kw-2">&amp;</span>collecotr_ip,
+            <span class="kw-2">&amp;</span>collector_port,
+            address,
+        ).<span class="kw">await</span>.unwrap_or(serde_json::Value::Bool(<span class="bool-val">false</span>));
+
+        <span class="kw">if </span>account != serde_json::Value::Bool(<span class="bool-val">false</span>) {
+            <span class="macro">println!</span>(<span class="string">"Account found in local collector"</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(account);
+        }
+
+
         <span class="kw">let </span>node = <span class="kw">match </span><span class="self">self</span>.get_next_appropriate_consensor().<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(n) =&gt; n.<span class="number">1</span>,
-            <span class="prelude-val">None </span>=&gt; {
+            <span class="kw">_ </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     <span class="string">"No consensor available"</span>,
