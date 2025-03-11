@@ -288,84 +288,112 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, sync::Arc};
-<span class="kw">use </span>tokio::sync::RwLock;
-<span class="kw">use </span>tokio::sync::mpsc::UnboundedSender;
-<span class="kw">use </span>tokio_rustls::TlsAcceptor;
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::subscription;
 <span class="kw">use crate</span>::{config, liberdus, subscription::WebsocketIncoming, Stats};
+<span class="kw">use </span>futures_util::{SinkExt, StreamExt};
+<span class="kw">use </span>std::{collections::HashMap, sync::Arc};
+<span class="kw">use </span>tokio::sync::mpsc::UnboundedSender;
+<span class="kw">use </span>tokio::sync::RwLock;
+<span class="kw">use </span>tokio_rustls::TlsAcceptor;
 <span class="kw">use </span>tokio_tungstenite;
 <span class="kw">use </span>tokio_tungstenite::tungstenite::protocol::Message;
-<span class="kw">use </span>futures_util::{StreamExt, SinkExt};
-<span class="kw">use </span><span class="kw">crate</span>::subscription;
-
-
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
 </span><span class="kw">pub enum </span>Methods {
     ChatEvent,
 }
 
-
 <span class="kw">pub type </span>SocketId = String;
 <span class="kw">pub type </span>SocketIdents = Arc&lt;RwLock&lt;HashMap&lt;SocketId, UnboundedSender&lt;Message&gt;&gt;&gt;&gt;;
 
 <span class="kw">fn </span>generate_uuid() -&gt; String {
     <span class="kw">let </span><span class="kw-2">mut </span>random_bytes = [<span class="number">0u8</span>; <span class="number">16</span>];
-    
+
     <span class="kw">let </span>seed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect(<span class="string">"Time went backwards"</span>)
         .as_nanos();
-    
-    <span class="kw">let </span><span class="kw-2">mut </span>seed = seed <span class="kw">as </span>u64; 
-    
+
+    <span class="kw">let </span><span class="kw-2">mut </span>seed = seed <span class="kw">as </span>u64;
+
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">16 </span>{
         random_bytes[i] = (seed % <span class="number">256</span>) <span class="kw">as </span>u8;
         seed = (seed &gt;&gt; <span class="number">8</span>) ^ (seed.wrapping_mul(<span class="number">6364136223846793005</span>));
     }
-    
+
     random_bytes[<span class="number">6</span>] = (random_bytes[<span class="number">6</span>] &amp; <span class="number">0x0F</span>) | <span class="number">0x40</span>;
-    
+
     random_bytes[<span class="number">8</span>] = (random_bytes[<span class="number">8</span>] &amp; <span class="number">0x3F</span>) | <span class="number">0x80</span>;
 
     <span class="macro">format!</span>(
         <span class="string">"{:08x}-{:04x}-{:04x}-{:04x}-{:012x}"</span>,
-        u32::from_be_bytes([random_bytes[<span class="number">0</span>], random_bytes[<span class="number">1</span>], random_bytes[<span class="number">2</span>], random_bytes[<span class="number">3</span>]]),
+        u32::from_be_bytes([
+            random_bytes[<span class="number">0</span>],
+            random_bytes[<span class="number">1</span>],
+            random_bytes[<span class="number">2</span>],
+            random_bytes[<span class="number">3</span>]
+        ]),
         u16::from_be_bytes([random_bytes[<span class="number">4</span>], random_bytes[<span class="number">5</span>]]),
         u16::from_be_bytes([random_bytes[<span class="number">6</span>], random_bytes[<span class="number">7</span>]]),
         u16::from_be_bytes([random_bytes[<span class="number">8</span>], random_bytes[<span class="number">9</span>]]),
         u64::from_be_bytes([
-            random_bytes[<span class="number">10</span>], random_bytes[<span class="number">11</span>], random_bytes[<span class="number">12</span>], random_bytes[<span class="number">13</span>],
-            random_bytes[<span class="number">14</span>], random_bytes[<span class="number">15</span>], <span class="number">0</span>, <span class="number">0
+            random_bytes[<span class="number">10</span>],
+            random_bytes[<span class="number">11</span>],
+            random_bytes[<span class="number">12</span>],
+            random_bytes[<span class="number">13</span>],
+            random_bytes[<span class="number">14</span>],
+            random_bytes[<span class="number">15</span>],
+            <span class="number">0</span>,
+            <span class="number">0
         </span>]) &gt;&gt; <span class="number">16 </span><span class="comment">// Ensure 12-digit hex format
     </span>)
 }
 
 <span class="kw">pub async fn </span>listen(
-    liberdus: Arc&lt;liberdus::Liberdus&gt;, 
-    config: Arc&lt;config::Config&gt;, 
-    server_stats: Arc&lt;Stats&gt;, 
-    tls_acceptor: <span class="prelude-ty">Option</span>&lt;TlsAcceptor&gt;
+    liberdus: Arc&lt;liberdus::Liberdus&gt;,
+    config: Arc&lt;config::Config&gt;,
+    server_stats: Arc&lt;Stats&gt;,
+    tls_acceptor: <span class="prelude-ty">Option</span>&lt;TlsAcceptor&gt;,
 ) {
     <span class="comment">// let semaphore = Arc::new(Semaphore::new(300));
 
-    </span><span class="kw">let </span>listener = <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port.clone()+<span class="number">1</span>)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(l) =&gt; l,
-        <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Error binding to port: {}"</span>, e);
-            std::process::exit(<span class="number">1</span>);
-        }
-    };
+    </span><span class="kw">let </span>listener =
+        <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port.clone() + <span class="number">1</span>))
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(l) =&gt; l,
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">"Error binding to port: {}"</span>, e);
+                std::process::exit(<span class="number">1</span>);
+            }
+        };
     <span class="kw">let </span>sock_map = Arc::new(RwLock::new(HashMap::new()));
-    <span class="kw">let </span>subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus.clone()));
-
+    <span class="kw">let </span>subscription_manager = Arc::new(subscription::Manager::new(
+        sock_map.clone(),
+        liberdus.clone(),
+    ));
 
     <span class="kw">let </span>sm = Arc::clone(<span class="kw-2">&amp;</span>subscription_manager);
     tokio::spawn(<span class="kw">async move </span>{
-
-        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(
-            tokio::time::Duration::from_secs(<span class="number">10</span>),
-        );
+        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(tokio::time::Duration::from_secs(<span class="number">10</span>));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
 
         <span class="kw">loop </span>{
@@ -373,7 +401,10 @@
             sm.discover().<span class="kw">await</span>;
         }
     });
-    <span class="macro">println!</span>(<span class="string">"Websocket Listening on: {}"</span>, listener.local_addr().expect(<span class="string">"Couldn't bind to a port"</span>));
+    <span class="macro">println!</span>(
+        <span class="string">"Websocket Listening on: {}"</span>,
+        listener.local_addr().expect(<span class="string">"Couldn't bind to a port"</span>)
+    );
 
     <span class="kw">loop </span>{
         <span class="comment">// let throttler = Arc::clone(&amp;semaphore);
@@ -402,25 +433,25 @@
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="comment">// let permit = throttler.acquire().await.unwrap();
-            </span>stats.stream_count.fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-            
+            </span>stats
+                .stream_count
+                .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
 
             <span class="kw">match </span>tls_acceptor {
-                <span class="prelude-val">Some</span>(tls_acceptor) =&gt; {
-                    <span class="kw">match </span>tls_acceptor.accept(raw_stream).<span class="kw">await</span>{
-                        <span class="prelude-val">Ok</span>(tls_stream) =&gt; {
-                            <span class="kw">let </span>tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                            <span class="kw">let </span>e = handle_stream(tls_stream, sock_map, subscription_manager).<span class="kw">await</span>;
-                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
-                                <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {:?}"</span>, e);
-                            }
-
-                        },
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">eprintln!</span>(<span class="string">"TLS Handshake Error: {:?}"</span>, e);
-                            stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-                            <span class="kw">return
-                        </span>}
+                <span class="prelude-val">Some</span>(tls_acceptor) =&gt; <span class="kw">match </span>tls_acceptor.accept(raw_stream).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(tls_stream) =&gt; {
+                        <span class="kw">let </span>tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                        <span class="kw">let </span>e = handle_stream(tls_stream, sock_map, subscription_manager).<span class="kw">await</span>;
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
+                            <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {:?}"</span>, e);
+                        }
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">eprintln!</span>(<span class="string">"TLS Handshake Error: {:?}"</span>, e);
+                        stats
+                            .stream_count
+                            .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+                        <span class="kw">return</span>;
                     }
                 },
                 <span class="prelude-val">None </span>=&gt; {
@@ -430,21 +461,22 @@
                     }
                 }
             }
-            stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            stats
+                .stream_count
+                .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
             <span class="comment">// drop(permit);
         </span>});
-
     }
 }
 
 <span class="kw">async fn </span>handle_stream&lt;StreamLike&gt;(
-    stream: StreamLike, 
-    sock_map: SocketIdents, 
-    subscription_manager: Arc&lt;subscription::Manager&gt;
+    stream: StreamLike,
+    sock_map: SocketIdents,
+    subscription_manager: Arc&lt;subscription::Manager&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
-    <span class="kw">where </span>StreamLike: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + <span class="lifetime">'static
-</span>{
-
+<span class="kw">where
+    </span>StreamLike: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + <span class="lifetime">'static</span>,
+{
     <span class="kw">let </span>socket_id = generate_uuid();
     <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) = tokio::sync::mpsc::unbounded_channel::&lt;Message&gt;();
     <span class="kw">let </span>ws_stream = <span class="kw">match </span>tokio_tungstenite::accept_async(stream).<span class="kw">await </span>{
@@ -454,10 +486,13 @@
                 guard.insert(socket_id.clone(), tx.clone());
             }
             ws_stream
-        },
+        }
         <span class="prelude-val">Err</span>(e) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error accepting websocket: {}"</span>, e);
-            <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Error accepting websocket"</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                <span class="string">"Error accepting websocket"</span>,
+            ));
         }
     };
 
@@ -468,41 +503,46 @@
     tokio::spawn(<span class="kw">async move </span>{
         <span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = read.next().<span class="kw">await </span>{
             <span class="kw">match </span>msg {
-                <span class="prelude-val">Ok</span>(msg) =&gt; {
-                    <span class="kw">match </span>msg {
-                        Message::Close(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let </span><span class="kw-2">mut </span>guard = sock_map.write().<span class="kw">await</span>;
-                            guard.remove(<span class="kw-2">&amp;</span>socket_id);
-                            subscription_manager_long_lived.unsubscribe_all(<span class="kw-2">&amp;</span>socket_id).<span class="kw">await</span>;
-                            drop(guard);
-                            <span class="kw">break</span>;
-                        },
-                        Message::Text(msg) =&gt; {
-                            <span class="kw">let </span>parsed: WebsocketIncoming = <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>msg) {
-                                <span class="prelude-val">Ok</span>(p) =&gt; p,
-                                <span class="prelude-val">Err</span>(e) =&gt; {
-                                    <span class="kw">let </span>resp = <span class="macro">serde_json::json!</span>({
-                                        <span class="string">"id"</span>: <span class="number">0</span>,
-                                        <span class="string">"error"</span>: <span class="string">"Invalid JSON or Request"</span>,
-                                    });
-                                    tx.send(Message::Text(resp.to_string().into())).unwrap();
-                                    <span class="kw">continue</span>;
-                                }
-                            };
+                <span class="prelude-val">Ok</span>(msg) =&gt; <span class="kw">match </span>msg {
+                    Message::Close(<span class="kw">_</span>) =&gt; {
+                        <span class="kw">let </span><span class="kw-2">mut </span>guard = sock_map.write().<span class="kw">await</span>;
+                        guard.remove(<span class="kw-2">&amp;</span>socket_id);
+                        subscription_manager_long_lived
+                            .unsubscribe_all(<span class="kw-2">&amp;</span>socket_id)
+                            .<span class="kw">await</span>;
+                        drop(guard);
+                        <span class="kw">break</span>;
+                    }
+                    Message::Text(msg) =&gt; {
+                        <span class="kw">let </span>parsed: WebsocketIncoming = <span class="kw">match </span>serde_json::from_str(<span class="kw-2">&amp;</span>msg) {
+                            <span class="prelude-val">Ok</span>(p) =&gt; p,
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="kw">let </span>resp = <span class="macro">serde_json::json!</span>({
+                                    <span class="string">"id"</span>: <span class="number">0</span>,
+                                    <span class="string">"error"</span>: <span class="string">"Invalid JSON or Request"</span>,
+                                });
+                                tx.send(Message::Text(resp.to_string().into())).unwrap();
+                                <span class="kw">continue</span>;
+                            }
+                        };
 
-                            <span class="kw">match </span>parsed.method {
-                                Methods::ChatEvent =&gt; {
-                                    <span class="kw">let </span>e = handle_subscriptions(parsed, tx.clone(), Arc::clone(<span class="kw-2">&amp;</span>subscription_manager_long_lived), id.clone()).<span class="kw">await</span>;
-                                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
-                                        <span class="macro">eprintln!</span>(<span class="string">"Error handling subscription: {}"</span>, e);
-                                    }
+                        <span class="kw">match </span>parsed.method {
+                            Methods::ChatEvent =&gt; {
+                                <span class="kw">let </span>e = handle_subscriptions(
+                                    parsed,
+                                    tx.clone(),
+                                    Arc::clone(<span class="kw-2">&amp;</span>subscription_manager_long_lived),
+                                    id.clone(),
+                                )
+                                .<span class="kw">await</span>;
+                                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
+                                    <span class="macro">eprintln!</span>(<span class="string">"Error handling subscription: {}"</span>, e);
                                 }
                             }
-
                         }
-                        <span class="kw">_ </span>=&gt; {
-                            <span class="kw">continue</span>;
-                        }
+                    }
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="kw">continue</span>;
                     }
                 },
                 <span class="prelude-val">Err</span>(e) =&gt; {
@@ -513,11 +553,10 @@
             }
         }
     });
-    
 
     <span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = rx.recv().<span class="kw">await </span>{
         <span class="kw">match </span>write.send(msg).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {},
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error sending message: {}"</span>, e);
                 <span class="kw">break</span>;
@@ -527,43 +566,25 @@
 
     <span class="kw">let _ </span>= write.close().<span class="kw">await</span>;
 
-
-
-
     <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">async fn </span>handle_subscriptions(
-    msg: WebsocketIncoming, 
-    transmitter: tokio::sync::mpsc::UnboundedSender&lt;Message&gt;, 
+    msg: WebsocketIncoming,
+    transmitter: tokio::sync::mpsc::UnboundedSender&lt;Message&gt;,
     subscription_manager: Arc&lt;subscription::Manager&gt;,
-    socket_id: SocketId
-
+    socket_id: SocketId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
     <span class="kw">match </span>msg.params.<span class="number">0 </span>{
         subscription::SubscriptionActions::Subscribe =&gt; {
-            <span class="kw">let </span>status = subscription_manager.subscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str()).<span class="kw">await</span>;
+            <span class="kw">let </span>status = subscription_manager
+                .subscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str())
+                .<span class="kw">await</span>;
 
             <span class="kw">let </span>resp = subscription::SubscriptionResponse {
                 result: status,
                 account_id: msg.params.<span class="number">1</span>.clone(),
-                error: <span class="prelude-val">None</span>, 
-            };
-
-            <span class="kw">let </span>text = serde_json::to_string(<span class="kw-2">&amp;</span>resp).unwrap();
-
-            <span class="kw">let </span>msg = Message::Text(text.into());
-
-            transmitter.send(msg).expect(<span class="string">"I think channel is closed"</span>);
-
-        },
-        subscription::SubscriptionActions::Unsubscribe =&gt; {
-            <span class="kw">let </span>status = subscription_manager.unsubscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str()).<span class="kw">await</span>;
-
-            <span class="kw">let </span>resp = subscription::SubscriptionResponse {
-                result: status,
-                account_id: msg.params.<span class="number">1</span>.clone(),
-                error: <span class="prelude-val">None</span>, 
+                error: <span class="prelude-val">None</span>,
             };
 
             <span class="kw">let </span>text = serde_json::to_string(<span class="kw-2">&amp;</span>resp).unwrap();
@@ -572,10 +593,25 @@
 
             transmitter.send(msg).expect(<span class="string">"I think channel is closed"</span>);
         }
+        subscription::SubscriptionActions::Unsubscribe =&gt; {
+            <span class="kw">let </span>status = subscription_manager
+                .unsubscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str())
+                .<span class="kw">await</span>;
 
+            <span class="kw">let </span>resp = subscription::SubscriptionResponse {
+                result: status,
+                account_id: msg.params.<span class="number">1</span>.clone(),
+                error: <span class="prelude-val">None</span>,
+            };
+
+            <span class="kw">let </span>text = serde_json::to_string(<span class="kw-2">&amp;</span>resp).unwrap();
+
+            <span class="kw">let </span>msg = Message::Text(text.into());
+
+            transmitter.send(msg).expect(<span class="string">"I think channel is closed"</span>);
+        }
     }
 
     <span class="prelude-val">Ok</span>(())
 }
-
 </code></pre></div></section></main></body></html>

@@ -177,30 +177,13 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Liberdus proxy server
 //! This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
-//! 
+//!
 //! For additional features like real time chat room subscription, data distribution protocol integration and muc more consistent API, please use liberdus-rpc.
-//! 
+//!
 //! The underlying algorithem that pick a node based on biased random selection is identical to the one used in liberdus-rpc.
-//! 
+//!
 //! # Have Cargo setup on your system
 //! ```bash
 //! curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -210,10 +193,10 @@
 //! git clone [link]
 //! ```
 //! Provide seed archiver in `./src/seed_archiver.json`.
-//! 
+//!
 //! # Standalone network
 //! This is for cases where you have the entire network running on a remote machine that's different than the proxy server, such that archiver will a list of validator with loop back ips since they're on same machine. But the list will break the proxy due to loopback ips. In this case, you can use the standalone network mode.
-//! 
+//!
 //! Configure it in `src/config.json`
 //! ```json
 //! {
@@ -223,28 +206,28 @@
 //!     }
 //! }
 //! ```
-//! 
+//!
 //! Configure the seed archiver in `./src/seed_archiver.json` to have the same ip and credentials.
-//! 
+//!
 //! Note that standalone network may never be used in production.
-//! 
+//!
 //! # Run the server
 //! ```bash
 //! cargo run
 //! ```
-</span><span class="kw">mod </span>http;
-<span class="kw">mod </span>liberdus;
-<span class="kw">mod </span>archivers;
-<span class="kw">mod </span>crypto;
+</span><span class="kw">mod </span>archivers;
 <span class="kw">mod </span>config;
+<span class="kw">mod </span>crypto;
+<span class="kw">mod </span>http;
+<span class="kw">mod </span>liberdus;
+<span class="kw">mod </span>shardus_monitor;
+<span class="kw">mod </span>subscription;
 <span class="kw">mod </span>tls;
 <span class="kw">mod </span>ws;
-<span class="kw">mod </span>subscription;
-<span class="kw">mod </span>shardus_monitor;
 
-<span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::sync::atomic::AtomicUsize;
 <span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::sync::atomic::AtomicUsize;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
 
 <span class="kw">struct </span>Stats {
@@ -259,15 +242,13 @@
     });
 
     <span class="kw">let </span>tls_config = <span class="kw">if </span>_configs.tls.enabled {
-            <span class="kw">match </span>tls::configure_tls(
-                <span class="kw-2">&amp;</span>_configs.tls.cert_path, 
-                <span class="kw-2">&amp;</span>_configs.tls.key_path) {
-                <span class="prelude-val">Ok</span>(c) =&gt; <span class="prelude-val">Some</span>(c),
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">eprintln!</span>(<span class="string">"Failed to configure TLS: {}"</span>, e);
-                    std::process::exit(<span class="number">1</span>);
-                }
+        <span class="kw">match </span>tls::configure_tls(<span class="kw-2">&amp;</span>_configs.tls.cert_path, <span class="kw-2">&amp;</span>_configs.tls.key_path) {
+            <span class="prelude-val">Ok</span>(c) =&gt; <span class="prelude-val">Some</span>(c),
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">"Failed to configure TLS: {}"</span>, e);
+                std::process::exit(<span class="number">1</span>);
             }
+        }
     } <span class="kw">else </span>{
         <span class="prelude-val">None
     </span>};
@@ -277,24 +258,18 @@
             <span class="kw">let </span>tls_config = tls_config.unwrap();
             <span class="kw">let </span>tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
             <span class="prelude-val">Some</span>(tls_acceptor)
-        },
-        <span class="bool-val">false </span>=&gt; {
-            <span class="prelude-val">None
-        </span>}
+        }
+        <span class="bool-val">false </span>=&gt; <span class="prelude-val">None</span>,
     };
-
-
-
 
     <span class="kw">let </span>archiver_seed_data = fs::read_to_string(<span class="kw-2">&amp;</span>_configs.archiver_seed_path)
         .map_err(|err| <span class="macro">format!</span>(<span class="string">"Failed to read archiver seed file: {}"</span>, err))
         .unwrap();
 
-    <span class="kw">let </span>archiver_seed: Vec&lt;archivers::Archiver&gt; = serde_json::from_str(<span class="kw-2">&amp;</span>archiver_seed_data).unwrap();
+    <span class="kw">let </span>archiver_seed: Vec&lt;archivers::Archiver&gt; =
+        serde_json::from_str(<span class="kw-2">&amp;</span>archiver_seed_data).unwrap();
 
-    <span class="kw">let </span>crypto = Arc::new(crypto::ShardusCrypto::new(
-        <span class="kw-2">&amp;</span>_configs.crypto_seed,
-    ));
+    <span class="kw">let </span>crypto = Arc::new(crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>_configs.crypto_seed));
 
     <span class="kw">let </span>arch_utils = Arc::new(archivers::ArchiverUtil::new(
         crypto.clone(),
@@ -315,9 +290,9 @@
         Arc::clone(<span class="kw-2">&amp;</span>_archivers).discover().<span class="kw">await</span>;
         _liberdus.update_active_nodelist().<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(
-            tokio::time::Duration::from_secs(_configs.nodelist_refresh_interval_sec),
-        );
+        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(tokio::time::Duration::from_secs(
+            _configs.nodelist_refresh_interval_sec,
+        ));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         <span class="kw">loop </span>{
@@ -334,7 +309,6 @@
         }
     }
 
-
     <span class="kw">let </span>config = Arc::new(_configs);
 
     <span class="kw">let </span>server_stats = Arc::new(Stats {
@@ -349,7 +323,12 @@
 
         <span class="kw">loop </span>{
             ticker.tick().<span class="kw">await</span>;
-            <span class="macro">print!</span>(<span class="string">"\rActive Connection Streams: {:&lt;3}"</span>,_stats.stream_count.load(std::sync::atomic::Ordering::Relaxed));
+            <span class="macro">print!</span>(
+                <span class="string">"\rActive Connection Streams: {:&lt;3}"</span>,
+                _stats
+                    .stream_count
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            );
         }
     });
 
@@ -358,17 +337,11 @@
     <span class="kw">let </span>server_stats_http = Arc::clone(<span class="kw-2">&amp;</span>server_stats);
     <span class="kw">let </span>tls_http = tls_acceptor.clone();
 
-
     <span class="kw">let </span>pid = std::process::id();
     <span class="macro">println!</span>(<span class="string">"PID: {}"</span>, pid);
 
     <span class="kw">let </span>http_listener_task = tokio::spawn(<span class="kw">async move </span>{
-        http::listen(
-            liberdus_http,
-            config_http,
-            server_stats_http,
-            tls_http,
-        ).<span class="kw">await</span>;
+        http::listen(liberdus_http, config_http, server_stats_http, tls_http).<span class="kw">await</span>;
     });
 
     <span class="kw">let </span>ws_liberdus = Arc::clone(<span class="kw-2">&amp;</span>lbd);
@@ -376,18 +349,11 @@
     <span class="kw">let </span>ws_server_stats = Arc::clone(<span class="kw-2">&amp;</span>server_stats);
     <span class="kw">let </span>ws_tls = tls_acceptor.clone();
     <span class="kw">let </span>websocket_listener_task = tokio::spawn(<span class="kw">async move </span>{
-        ws::listen(
-            ws_liberdus,
-            ws_config,
-            ws_server_stats,
-            ws_tls,
-        ).<span class="kw">await</span>;
+        ws::listen(ws_liberdus, ws_config, ws_server_stats, ws_tls).<span class="kw">await</span>;
     });
-
 
     <span class="macro">tokio::try_join!</span>(http_listener_task, websocket_listener_task)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
-
 }
 </code></pre></div></section></main></body></html>

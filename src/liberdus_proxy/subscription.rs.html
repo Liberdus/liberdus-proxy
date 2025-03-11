@@ -283,18 +283,6 @@
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -332,7 +320,7 @@
 <span class="kw">type </span>UserAccountAddress = String;
 <span class="kw">type </span>Timestamp = u128;
 
-<span class="kw">pub struct </span>Manager{
+<span class="kw">pub struct </span>Manager {
     states: Arc&lt;RwLock&lt;Inner&gt;&gt;,
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
     socket_map: ws::SocketIdents,
@@ -360,11 +348,17 @@
 
     <span class="kw">async fn </span>set_states(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: UserAccountAddress, socket_id: <span class="kw-2">&amp;</span>ws::SocketId) {
         <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.states.write().<span class="kw">await</span>;
-        
-        <span class="kw">let </span>subs = guard.accounts_by_sock.entry(socket_id.clone()).or_insert(HashSet::new());
+
+        <span class="kw">let </span>subs = guard
+            .accounts_by_sock
+            .entry(socket_id.clone())
+            .or_insert(HashSet::new());
         subs.insert(addr.clone());
 
-        <span class="kw">let </span>sockets = guard.socks_by_account.entry(addr.clone()).or_insert(HashSet::new());
+        <span class="kw">let </span>sockets = guard
+            .socks_by_account
+            .entry(addr.clone())
+            .or_insert(HashSet::new());
         sockets.insert(socket_id.clone());
 
         guard.last_received.entry(addr.clone()).or_insert(<span class="number">0</span>);
@@ -379,9 +373,8 @@
                 <span class="kw">if </span>a.is_empty() {
                     guard.accounts_by_sock.remove(socket_id);
                 }
-            },
-            <span class="kw">_ </span>=&gt; {
             }
+            <span class="kw">_ </span>=&gt; {}
         }
 
         <span class="kw">match </span>guard.socks_by_account.get_mut(<span class="kw-2">&amp;</span>addr) {
@@ -391,13 +384,9 @@
                     guard.socks_by_account.remove(<span class="kw-2">&amp;</span>addr);
                     guard.last_received.remove(<span class="kw-2">&amp;</span>addr);
                 }
-            },
-            <span class="kw">_ </span>=&gt; {
             }
+            <span class="kw">_ </span>=&gt; {}
         }
-
-
-        
     }
 
     <span class="kw">async fn </span>is_exist(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: <span class="kw-2">&amp;</span>UserAccountAddress, sock_id: <span class="kw-2">&amp;</span>String) -&gt; bool {
@@ -405,15 +394,12 @@
 
         <span class="kw">let </span>accounts = <span class="kw">match </span>guard.accounts_by_sock.get(sock_id) {
             <span class="prelude-val">Some</span>(a) =&gt; a.contains(addr),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="bool-val">false
-            </span>}
+            <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
         };
 
         drop(guard);
 
         accounts
-
     }
 
     <span class="kw">pub async fn </span>unsubscribe_all(<span class="kw-2">&amp;</span><span class="self">self</span>, socket_id: <span class="kw-2">&amp;</span>ws::SocketId) {
@@ -438,10 +424,14 @@
         <span class="comment">// println!("{:?}", self.states.read().await);
     </span>}
 
-    <span class="kw">pub async fn </span>discover(<span class="kw-2">&amp;</span><span class="self">self</span>)  {
+    <span class="kw">pub async fn </span>discover(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>read_guard = <span class="self">self</span>.states.read().<span class="kw">await</span>;
 
-        <span class="kw">let </span>accounts = read_guard.socks_by_account.keys().cloned().collect::&lt;Vec&lt;UserAccountAddress&gt;&gt;();
+        <span class="kw">let </span>accounts = read_guard
+            .socks_by_account
+            .keys()
+            .cloned()
+            .collect::&lt;Vec&lt;UserAccountAddress&gt;&gt;();
 
         drop(read_guard);
 
@@ -450,7 +440,6 @@
         <span class="kw">if </span>accounts.is_empty() {
             <span class="kw">return</span>;
         }
-
 
         <span class="kw">for </span>address <span class="kw">in </span>accounts {
             <span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.liberdus);
@@ -478,9 +467,7 @@
                 <span class="kw">let </span>guard = states.read().<span class="kw">await</span>;
 
                 <span class="kw">let </span>old_timestamp = <span class="kw">match </span>guard.last_received.get(<span class="kw-2">&amp;</span>address) {
-                    <span class="prelude-val">Some</span>(t) =&gt; {
-                        t.clone()
-                    },
+                    <span class="prelude-val">Some</span>(t) =&gt; t.clone(),
                     <span class="prelude-val">None </span>=&gt; {
                         <span class="comment">// todo purge this address from all entries
                         </span>drop(guard);
@@ -489,7 +476,6 @@
                 };
 
                 drop(guard);
-
 
                 <span class="kw">if </span>old_timestamp == <span class="number">0 </span>&amp;&amp; new_timestamp &gt; old_timestamp {
                     <span class="kw">let </span><span class="kw-2">mut </span>guard = states.write().<span class="kw">await</span>;
@@ -502,13 +488,18 @@
                 }
 
                 <span class="kw">if </span>new_timestamp &gt; old_timestamp {
-                    <span class="kw">let </span>sockets = states.read().<span class="kw">await</span>.socks_by_account.get(<span class="kw-2">&amp;</span>address).unwrap_or(<span class="kw-2">&amp;</span>HashSet::new()).clone();
+                    <span class="kw">let </span>sockets = states
+                        .read()
+                        .<span class="kw">await
+                        </span>.socks_by_account
+                        .get(<span class="kw-2">&amp;</span>address)
+                        .unwrap_or(<span class="kw-2">&amp;</span>HashSet::new())
+                        .clone();
 
                     <span class="kw">let </span>event = SubscriptionEvent {
                         account_id: address.clone(),
                         timestamp: new_timestamp,
                     };
-
 
                     <span class="kw">let </span>tx = tx.clone();
                     <span class="kw">let </span>msg = Message::Text(serde_json::to_string(<span class="kw-2">&amp;</span>event).unwrap().into());
@@ -522,17 +513,13 @@
                     drop(guard);
 
                     <span class="kw">for </span>socket <span class="kw">in </span>sockets {
-
-                        tx.clone().send((socket.clone(), msg.clone())).expect(<span class="string">"Failed to send message"</span>);
-
-
+                        tx.clone()
+                            .send((socket.clone(), msg.clone()))
+                            .expect(<span class="string">"Failed to send message"</span>);
                     }
-
                 }
-
             });
         }
-
 
         drop(tx);
         <span class="kw">while let </span><span class="prelude-val">Some</span>((sock_id, msg)) = rx.recv().<span class="kw">await </span>{
@@ -549,30 +536,26 @@
                 <span class="self">self</span>.unsubscribe_all(<span class="kw-2">&amp;</span>sock_id).<span class="kw">await</span>;
             }
         }
-
     }
 
     <span class="kw">pub async fn </span>subscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, socket_id: <span class="kw-2">&amp;</span>ws::SocketId, address: <span class="kw-2">&amp;</span>str) -&gt; bool {
         <span class="kw">match </span><span class="self">self</span>.is_exist(<span class="kw-2">&amp;</span>address.to_string(), <span class="kw-2">&amp;</span>socket_id).<span class="kw">await </span>{
             <span class="bool-val">true </span>=&gt; {
                 <span class="kw">return </span><span class="bool-val">false</span>;
-            },
+            }
             <span class="bool-val">false </span>=&gt; {
                 <span class="self">self</span>.set_states(address.to_string(), socket_id).<span class="kw">await</span>;
                 <span class="kw">return </span><span class="bool-val">true</span>;
             }
         }
-    
     }
 
-    <span class="kw">pub async fn </span>unsubscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, socket_id: <span class="kw-2">&amp;</span>ws::SocketId, address: <span class="kw-2">&amp;</span>str) -&gt; bool  {
+    <span class="kw">pub async fn </span>unsubscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, socket_id: <span class="kw-2">&amp;</span>ws::SocketId, address: <span class="kw-2">&amp;</span>str) -&gt; bool {
         <span class="kw">let </span>guard = <span class="self">self</span>.states.read().<span class="kw">await</span>;
 
         <span class="kw">let </span>accounts = <span class="kw">match </span>guard.accounts_by_sock.get(socket_id) {
             <span class="prelude-val">Some</span>(a) =&gt; a.contains(<span class="kw-2">&amp;</span>address.to_string()),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="bool-val">false
-            </span>}
+            <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
         };
 
         drop(guard);
@@ -583,13 +566,6 @@
         }
 
         <span class="bool-val">false
-
     </span>}
-
-
-    
-
 }
-
-
 </code></pre></div></section></main></body></html>

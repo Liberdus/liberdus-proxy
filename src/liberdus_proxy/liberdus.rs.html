@@ -659,21 +659,108 @@
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
 <a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
-</span><span class="kw">use crate</span>::{archivers, config, http};
-<span class="kw">use </span>tokio::io::{AsyncWriteExt, AsyncRead, AsyncWrite};
-<span class="kw">use </span>reqwest;
-<span class="kw">use </span>serde_json;
-<span class="kw">use </span>serde::{<span class="self">self</span>, Deserialize, Serialize};
+</span><span class="kw">use </span><span class="kw">crate</span>::crypto;
+<span class="kw">use crate</span>::{archivers, config, http};
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>std::{cmp::Ordering, collections::HashMap, sync::{atomic::{AtomicBool, AtomicUsize}, Arc}, time::Duration, u128};
+<span class="kw">use </span>reqwest;
+<span class="kw">use </span>serde::{<span class="self">self</span>, Deserialize, Serialize};
+<span class="kw">use </span>serde_json;
+<span class="kw">use </span>std::{
+    cmp::Ordering,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
+    time::Duration,
+    u128,
+};
+<span class="kw">use </span>tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 <span class="kw">use </span>tokio::{net::TcpStream, sync::RwLock, time::timeout};
-<span class="kw">use </span><span class="kw">crate</span>::crypto;
 
-<span class="attr">#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(Clone)]
+<span class="attr">#[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[allow(non_snake_case)]
-</span><span class="kw">pub struct </span>Consensor{
+</span><span class="kw">pub struct </span>Consensor {
     <span class="kw">pub </span>id: String,
     <span class="kw">pub </span>ip: String,
     <span class="kw">pub </span>port: u16,
@@ -685,11 +772,10 @@
 
 <span class="attr">#[allow(non_snake_case)]
 #[derive(serde::Deserialize, serde::Serialize)]
-</span><span class="kw">struct </span>SignedNodeListResp{
+</span><span class="kw">struct </span>SignedNodeListResp {
     <span class="kw">pub </span>nodeList: Vec&lt;Consensor&gt;,
     <span class="kw">pub </span>sign: Signature,
 }
-
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize)]
 </span><span class="kw">pub struct </span>Signature {
@@ -708,9 +794,13 @@
     config: Arc&lt;config::Config&gt;,
 }
 
-<span class="kw">impl  </span>Liberdus {
-    <span class="kw">pub fn </span>new (sc: Arc&lt;crypto::ShardusCrypto&gt;, archivers: Arc&lt;RwLock&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;, config: config::Config) -&gt; <span class="self">Self</span>{
-        Liberdus{
+<span class="kw">impl </span>Liberdus {
+    <span class="kw">pub fn </span>new(
+        sc: Arc&lt;crypto::ShardusCrypto&gt;,
+        archivers: Arc&lt;RwLock&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;,
+        config: config::Config,
+    ) -&gt; <span class="self">Self </span>{
+        Liberdus {
             config: Arc::new(config),
             round_robin_index: Arc::new(AtomicUsize::new(<span class="number">0</span>)),
             trip_ms: Arc::new(RwLock::new(HashMap::new())),
@@ -720,55 +810,66 @@
             crypto: sc,
             load_distribution_commulative_bias: Arc::new(RwLock::new(Vec::new())),
         }
-
-
     }
 
     <span class="doccomment">/// trigger a full nodelist update from one of the archivers
-    </span><span class="kw">pub async fn </span>update_active_nodelist(<span class="kw-2">&amp;</span><span class="self">self</span>){
-
+    </span><span class="kw">pub async fn </span>update_active_nodelist(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>archivers = <span class="self">self</span>.archivers.read().<span class="kw">await</span>;
 
-        <span class="kw">for </span>archiver <span class="kw">in </span>archivers.iter(){
-            <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/full-nodelist?activeOnly=true"</span>, archiver.ip, archiver.port);
+        <span class="kw">for </span>archiver <span class="kw">in </span>archivers.iter() {
+            <span class="kw">let </span>url = <span class="macro">format!</span>(
+                <span class="string">"http://{}:{}/full-nodelist?activeOnly=true"</span>,
+                archiver.ip, archiver.port
+            );
             <span class="kw">let </span>collected_nodelist = <span class="kw">match </span>reqwest::get(<span class="kw-2">&amp;</span>url).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(resp) =&gt; {
-                    <span class="kw">let </span>body: <span class="prelude-ty">Result</span>&lt;SignedNodeListResp, <span class="kw">_</span>&gt; = serde_json::from_str(<span class="kw-2">&amp;</span>resp.text().<span class="kw">await</span>.unwrap());
-                    <span class="kw">match </span>body{
+                    <span class="kw">let </span>body: <span class="prelude-ty">Result</span>&lt;SignedNodeListResp, <span class="kw">_</span>&gt; =
+                        serde_json::from_str(<span class="kw-2">&amp;</span>resp.text().<span class="kw">await</span>.unwrap());
+                    <span class="kw">match </span>body {
                         <span class="prelude-val">Ok</span>(body) =&gt; {
                             <span class="comment">//important that serde doesn't populate default value for
                             // Consensor::trip_ms
                             // it'll taint the signature payload
-                            </span><span class="kw">if </span><span class="self">self</span>.verify_signature(<span class="kw-2">&amp;</span>body){
+                            </span><span class="kw">if </span><span class="self">self</span>.verify_signature(<span class="kw-2">&amp;</span>body) {
                                 <span class="prelude-val">Ok</span>(body.nodeList)
+                            } <span class="kw">else </span>{
+                                <span class="prelude-val">Err</span>(std::io::Error::new(
+                                    std::io::ErrorKind::InvalidData,
+                                    <span class="string">"Invalid signature"</span>,
+                                ))
                             }
-                            <span class="kw">else</span>{
-                                <span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::InvalidData, <span class="string">"Invalid signature"</span>))
-                            }
-                        },
-                        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+                        }
+                        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            e.to_string(),
+                        )),
                     }
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e.to_string())),
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionAborted,
+                    e.to_string(),
+                )),
             };
 
-            <span class="kw">match </span>collected_nodelist{
+            <span class="kw">match </span>collected_nodelist {
                 <span class="prelude-val">Ok</span>(<span class="kw-2">mut </span>nodelist) =&gt; {
                     <span class="kw">if </span><span class="self">self</span>.config.standalone_network.enabled {
                         <span class="kw">let </span>replacement_ip = <span class="self">self</span>.config.standalone_network.replacement_ip.clone();
-                        <span class="kw">for </span>node <span class="kw">in </span>nodelist.iter_mut(){
+                        <span class="kw">for </span>node <span class="kw">in </span>nodelist.iter_mut() {
                             node.ip = replacement_ip.clone();
                         }
                     }
 
                     {
-                       <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.active_nodelist.write().<span class="kw">await</span>; 
-                       <span class="kw-2">*</span>guard = nodelist;
+                        <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.active_nodelist.write().<span class="kw">await</span>;
+                        <span class="kw-2">*</span>guard = nodelist;
                     }
 
-                   <span class="self">self</span>.round_robin_index.store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
-                   <span class="comment">// inititally node list does not contain load data.
-                   </span><span class="self">self</span>.list_prepared.store(<span class="bool-val">false</span>, std::sync::atomic::Ordering::Relaxed);
+                    <span class="self">self</span>.round_robin_index
+                        .store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
+                    <span class="comment">// inititally node list does not contain load data.
+                    </span><span class="self">self</span>.list_prepared
+                        .store(<span class="bool-val">false</span>, std::sync::atomic::Ordering::Relaxed);
                     {
                         <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.load_distribution_commulative_bias.write().<span class="kw">await</span>;
                         <span class="kw-2">*</span>guard = Vec::new();
@@ -777,20 +878,17 @@
                         <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.trip_ms.write().<span class="kw">await</span>;
                         <span class="kw-2">*</span>guard = HashMap::new();
                     }
-                   <span class="kw">break
-                </span>},
+                    <span class="kw">break</span>;
+                }
                 <span class="prelude-val">Err</span>(_e) =&gt; {
                     <span class="kw">continue</span>;
                 }
             }
-
-
         }
-
     }
 
     <span class="doccomment">/// Calculates a node's bias for weighted random selection based on its HTTP round-trip time (RTT).
-    /// 
+    ///
     /// # Formula
     /// The function uses the following formula to calculate bias:
     /// ```math
@@ -800,12 +898,12 @@
     /// - `timetaken_ms` is the round-trip time (RTT) of the node in milliseconds.
     /// - `min_timeout` is the theoretical minimum RTT (set to 0.01 ms for numerical stability).
     /// - `max_timeout` is the maximum allowable RTT.
-    /// 
+    ///
     /// # Explanation
     /// The bias is normalized to a scale between 0 and 1, where:
     /// - A lower `timetaken_ms` (faster node) results in a higher bias, making the node more likely to be selected.
     /// - A higher `timetaken_ms` (slower node) results in a lower bias, making the node less likely to be selected.
-    /// 
+    ///
     /// ## Steps:
     /// 1. **Normalize RTT:** The RTT (`timetaken_ms`) is normalized using the formula:
     ///    ```math
@@ -818,10 +916,10 @@
     ///    ```
     ///    This ensures that faster nodes (lower RTT) have a higher bias (closer to 1.0),
     ///    while slower nodes (higher RTT) have a lower bias (closer to 0.0).
-    /// 
+    ///
     /// ## Special Case
     /// If `max_timeout` is `1` (to prevent division by zero), the function assumes all nodes are equally performant and returns a bias of `1.0`.
-    /// 
+    ///
     /// ## Example
     /// For a node with:
     /// - `timetaken_ms = 100`
@@ -832,7 +930,7 @@
     /// bias = 1.0 - 0.19996 ≈ 0.80004
     /// ```
     /// This node is more likely to be selected compared to nodes with higher RTTs.
-    /// 
+    ///
     /// # Why This Works
     /// - This bias calculation ensures that faster nodes (lower RTTs) are favored during selection.
     /// - Nodes with RTTs close to `max_timeout` are effectively penalized, reducing their likelihood of being selected.
@@ -848,14 +946,14 @@
     }
 
     <span class="doccomment">/// Computes and maintains a cumulative bias distribution for node selection.
-    /// 
+    ///
     /// # What is Cumulative Bias?
     /// Cumulative bias is a method to efficiently perform weighted random selection.
     /// Each node's individual bias is calculated based on its HTTP round-trip time (RTT),
     /// and these biases are accumulated into a cumulative distribution. This allows for
     /// efficient random selection of nodes where the probability of selection is proportional
     /// to their bias.
-    /// 
+    ///
     /// # How It Works
     /// 1. **Calculate Individual Bias:** For each node, an individual bias is computed using
     ///    the `calculate_bias` function, which maps RTT to a value between `0.0` (poor performance)
@@ -868,13 +966,13 @@
     /// 3. **Select Nodes:** When selecting a node, a random value is generated in the range
     ///    `[0, total_bias]`, where `total_bias` is the last element of the cumulative vector.
     ///    The appropriate node is determined using a binary search over the cumulative biases.
-    /// 
+    ///
     /// # Why It Works
     /// - The cumulative bias ensures that nodes with higher individual biases have a larger
     ///   range of values in the cumulative distribution, making them more likely to be selected.
     /// - The binary search provides efficient lookup for random selection, making this approach
     ///   scalable for large node lists.
-    /// 
+    ///
     /// # Example
     /// Given the following nodes and biases:
     /// ```text
@@ -891,16 +989,20 @@
     /// - A value in `[0.0, 0.2)` selects Node A.
     /// - A value in `[0.2, 0.7)` selects Node B.
     /// - A value in `[0.7, 1.0]` selects Node C.
-    /// 
+    ///
     /// # Efficiency
     /// - Cumulative bias computation is O(n), where `n` is the number of nodes.
     /// - Random selection using binary search is O(log n).
-    /// 
+    ///
     /// # Implementation in `prepare_list`
     /// - The cumulative bias is stored in `self.load_distribution_commulative_bias`.
     /// - It is recalculated whenever the node list is updated or RTT data changes.
     </span><span class="kw">async fn </span>prepare_list(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if </span><span class="self">self</span>.list_prepared.load(std::sync::atomic::Ordering::Relaxed) == <span class="bool-val">true </span>{
+        <span class="kw">if </span><span class="self">self
+            </span>.list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed)
+            == <span class="bool-val">true
+        </span>{
             <span class="kw">return</span>;
         }
 
@@ -928,7 +1030,7 @@
         <span class="kw">for </span>node <span class="kw">in </span><span class="kw-2">&amp;mut </span>sorted_nodes {
             <span class="kw">let </span>last_http_round_trip = <span class="kw-2">*</span>trip_ms.get(<span class="kw-2">&amp;</span>node.id).unwrap_or(<span class="kw-2">&amp;</span>max_timeout);
             <span class="kw">let </span>bias = <span class="self">self</span>.calculate_bias(last_http_round_trip, max_timeout);
-            node.rng_bias =  <span class="prelude-val">Some</span>(bias);
+            node.rng_bias = <span class="prelude-val">Some</span>(bias);
             total_bias += node.rng_bias.unwrap_or(<span class="number">0.0</span>);
             cumulative_bias.push(total_bias);
         }
@@ -943,55 +1045,58 @@
             <span class="kw-2">*</span>guard = cumulative_bias;
         }
 
-        <span class="self">self</span>.list_prepared.store(<span class="bool-val">true</span>, std::sync::atomic::Ordering::Relaxed);
+        <span class="self">self</span>.list_prepared
+            .store(<span class="bool-val">true</span>, std::sync::atomic::Ordering::Relaxed);
     }
-
 
     <span class="doccomment">/// Selects a random node from the active list based on weighted bias
     /// bias is derived from last http call's round trip time to the node.
     /// this function required the list to be sorted and bias values are calculated prior
     /// return None otherwise.
     </span><span class="kw">async fn </span>get_random_consensor_biased(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Consensor)&gt; {
-            <span class="kw">if </span><span class="self">self</span>.list_prepared.load(std::sync::atomic::Ordering::Relaxed) == <span class="bool-val">false </span>{
-                <span class="kw">return </span><span class="prelude-val">None</span>;
-            }
+        <span class="kw">if </span><span class="self">self
+            </span>.list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed)
+            == <span class="bool-val">false
+        </span>{
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
 
-            <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.clone();
-            <span class="kw">let </span>cumulative_weights = <span class="self">self</span>.load_distribution_commulative_bias.read().<span class="kw">await</span>.clone();
+        <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.clone();
+        <span class="kw">let </span>cumulative_weights = <span class="self">self</span>.load_distribution_commulative_bias.read().<span class="kw">await</span>.clone();
 
-            <span class="kw">if </span>nodes.is_empty() || cumulative_weights.is_empty() {
-                <span class="kw">return </span><span class="prelude-val">None</span>;
-            }
+        <span class="kw">if </span>nodes.is_empty() || cumulative_weights.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
 
-            <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
-            <span class="kw">let </span>total_bias = <span class="kw-2">*</span>cumulative_weights.last().unwrap_or(<span class="kw-2">&amp;</span><span class="number">1.0</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+        <span class="kw">let </span>total_bias = <span class="kw-2">*</span>cumulative_weights.last().unwrap_or(<span class="kw-2">&amp;</span><span class="number">1.0</span>);
 
+        <span class="comment">// If all nodes have the same bias, return a random node
+        </span><span class="kw">if </span>total_bias == <span class="number">0.0 </span>{
+            <span class="kw">let </span>idx = rng.gen_range(<span class="number">0</span>..nodes.len());
+            <span class="self">self</span>.round_robin_index
+                .store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="self">self</span>.list_prepared
+                .store(<span class="bool-val">false</span>, std::sync::atomic::Ordering::Relaxed);
+            <span class="kw">return </span><span class="prelude-val">Some</span>((idx, nodes[idx].clone()));
+        }
 
-            <span class="comment">// If all nodes have the same bias, return a random node
-            </span><span class="kw">if </span>total_bias == <span class="number">0.0 </span>{
-                <span class="kw">let </span>idx = rng.gen_range(<span class="number">0</span>..nodes.len());
-                <span class="self">self</span>.round_robin_index.store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
-                <span class="self">self</span>.list_prepared.store(<span class="bool-val">false</span>, std::sync::atomic::Ordering::Relaxed);
-                <span class="kw">return </span><span class="prelude-val">Some</span>((idx, nodes[idx].clone()));
-            }
+        <span class="kw">let </span>random_value: f64 = rng.gen_range(<span class="number">0.0</span>..total_bias);
 
-            <span class="kw">let </span>random_value: f64 = rng.gen_range(<span class="number">0.0</span>..total_bias);
+        <span class="kw">let </span>index = <span class="kw">match </span>cumulative_weights
+            .binary_search_by(|<span class="kw-2">&amp;</span>bias| bias.partial_cmp(<span class="kw-2">&amp;</span>random_value).unwrap_or(Ordering::Equal))
+        {
+            <span class="prelude-val">Ok</span>(i) =&gt; i,  <span class="comment">// Exact match
+            </span><span class="prelude-val">Err</span>(i) =&gt; i, <span class="comment">// Closest match (next higher value)
+        </span>};
 
-            <span class="kw">let </span>index = <span class="kw">match </span>cumulative_weights.binary_search_by(
-                |<span class="kw-2">&amp;</span>bias| bias.partial_cmp(<span class="kw-2">&amp;</span>random_value).unwrap_or(Ordering::Equal)
-            ) {
-                <span class="prelude-val">Ok</span>(i) =&gt; i,      <span class="comment">// Exact match
-                </span><span class="prelude-val">Err</span>(i) =&gt; i,     <span class="comment">// Closest match (next higher value)
-            </span>};
-
-            <span class="prelude-val">Some</span>((index, nodes[index].clone()))
-
+        <span class="prelude-val">Some</span>((index, nodes[index].clone()))
     }
-
 
     <span class="doccomment">/// This function is the defecto way to get a consensor.
     /// When nodeList is first refreshed the round trip http request time for the nodes are
-    /// unknown. The function will round robin from the list to return consensor. 
+    /// unknown. The function will round robin from the list to return consensor.
     /// During the interaction with the each consensors in each rpc call, it will collect the round trip time for
     /// each node. The values are then used to calculate a weighted bias for
     /// node selection. Subsequent call will be redirected towards the node based on that bias and round robin
@@ -1000,14 +1105,23 @@
         <span class="kw">if </span><span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.is_empty() {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
-        <span class="kw">match 
-            </span><span class="self">self</span>.list_prepared.load(std::sync::atomic::Ordering::Relaxed) &amp;&amp; 
-            (<span class="self">self</span>.load_distribution_commulative_bias.read().<span class="kw">await</span>.clone().len() == <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.len()) {
-            <span class="bool-val">true </span>=&gt; {
-               <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await 
-            </span>},
+        <span class="kw">match </span><span class="self">self
+            </span>.list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed)
+            &amp;&amp; (<span class="self">self
+                </span>.load_distribution_commulative_bias
+                .read()
+                .<span class="kw">await
+                </span>.clone()
+                .len()
+                == <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.len())
+        {
+            <span class="bool-val">true </span>=&gt; <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>,
             <span class="bool-val">false </span>=&gt; {
-                <span class="kw">let </span>index = <span class="self">self</span>.round_robin_index.fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed).clone();
+                <span class="kw">let </span>index = <span class="self">self
+                    </span>.round_robin_index
+                    .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed)
+                    .clone();
 
                 <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>;
                 <span class="kw">if </span>index &gt;= nodes.len() {
@@ -1020,13 +1134,17 @@
                     <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>;
                 }
                 <span class="kw">return </span><span class="prelude-val">Some</span>((index, nodes[index].clone()));
-            },
+            }
         }
     }
 
-    <span class="kw">pub fn </span>set_consensor_trip_ms(<span class="kw-2">&amp;</span><span class="self">self</span>, node_id: String, trip_ms: u128){
+    <span class="kw">pub fn </span>set_consensor_trip_ms(<span class="kw-2">&amp;</span><span class="self">self</span>, node_id: String, trip_ms: u128) {
         <span class="comment">// list already prepared on the first round robin,  no need to keep recording rtt for nodes
-        </span><span class="kw">if </span><span class="self">self</span>.list_prepared.load(std::sync::atomic::Ordering::Relaxed) == <span class="bool-val">true </span>{
+        </span><span class="kw">if </span><span class="self">self
+            </span>.list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed)
+            == <span class="bool-val">true
+        </span>{
             <span class="kw">return</span>;
         }
 
@@ -1034,9 +1152,9 @@
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>guard = trip_ms_map.write().<span class="kw">await</span>;
-            guard.insert(node_id, trip_ms);           
-            drop(guard);                              
-        });        
+            guard.insert(node_id, trip_ms);
+            drop(guard);
+        });
     }
 
     <span class="kw">fn </span>verify_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, signed_payload: <span class="kw-2">&amp;</span>SignedNodeListResp) -&gt; bool {
@@ -1044,55 +1162,70 @@
             <span class="string">"nodeList"</span>: signed_payload.nodeList,
         });
 
-        <span class="kw">let </span>hash = <span class="self">self</span>.crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), <span class="kw">crate</span>::crypto::Format::Hex);
+        <span class="kw">let </span>hash = <span class="self">self</span>.crypto.hash(
+            <span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(),
+            <span class="kw">crate</span>::crypto::Format::Hex,
+        );
 
         <span class="kw">let </span>pk = sodiumoxide::crypto::sign::PublicKey::from_slice(
-            <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(<span class="kw-2">&amp;</span>signed_payload.sign.owner).unwrap()
-        ).unwrap();
+            <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(<span class="kw-2">&amp;</span>signed_payload.sign.owner).unwrap(),
+        )
+        .unwrap();
 
-        <span class="self">self</span>.crypto.verify(<span class="kw-2">&amp;</span>hash, <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(<span class="kw-2">&amp;</span>signed_payload.sign.sig).unwrap().to_vec(), <span class="kw-2">&amp;</span>pk)
-
+        <span class="self">self</span>.crypto.verify(
+            <span class="kw-2">&amp;</span>hash,
+            <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(<span class="kw-2">&amp;</span>signed_payload.sign.sig)
+                .unwrap()
+                .to_vec(),
+            <span class="kw-2">&amp;</span>pk,
+        )
     }
 
-    <span class="kw">pub async fn </span>get_account_by_address(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>str) -&gt; 
-        <span class="prelude-ty">Result</span>&lt;serde_json::Value, std::io::Error&gt; 
-    {
+    <span class="kw">pub async fn </span>get_account_by_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        address: <span class="kw-2">&amp;</span>str,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, std::io::Error&gt; {
         <span class="kw">let </span>node = <span class="kw">match </span><span class="self">self</span>.get_next_appropriate_consensor().<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(n) =&gt; n.<span class="number">1</span>,
             <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"No consensor available"</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    <span class="string">"No consensor available"</span>,
+                ));
             }
         };
         <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/account/{}"</span>, node.ip, node.port, address);
         <span class="kw">let </span>account = <span class="kw">match </span>reqwest::get(<span class="kw-2">&amp;</span>url).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(r) =&gt; {
                 <span class="kw">let </span>parsed = <span class="kw">match </span>r.json::&lt;GetAccountResp&gt;().<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(p) =&gt; {
-                        p.account
-                    },
+                    <span class="prelude-val">Ok</span>(p) =&gt; p.account,
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="macro">eprintln!</span>(<span class="string">"Failed to parse account: {}"</span>, e);
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to parse account"</span>));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            <span class="string">"Failed to parse account"</span>,
+                        ));
                     }
                 };
                 parsed
-            },
+            }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Failed to get account: {}"</span>, e);
-                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to get account"</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    <span class="string">"Failed to get account"</span>,
+                ));
             }
         };
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(account);
     }
-
 }
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize)]
-</span><span class="kw">pub struct </span>GetAccountResp{
+</span><span class="kw">pub struct </span>GetAccountResp {
     account: serde_json::Value,
 }
-
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
@@ -1138,8 +1271,6 @@
     <span class="kw">pub </span>received_timestamp: u128,
 }
 
-
-
 <span class="comment">// write tests
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
@@ -1151,14 +1282,20 @@
 
         <span class="kw">let </span>config = config::Config::load().unwrap();
 
-        <span class="kw">let </span>_mock_archiver = archivers::Archiver{
+        <span class="kw">let </span>_mock_archiver = archivers::Archiver {
             ip: <span class="string">"0.0.0.0"</span>.to_string(),
             port: <span class="number">0</span>,
             publicKey: <span class="string">"0x0"</span>.to_string(),
         };
 
         <span class="kw">let </span>archivers = Arc::new(RwLock::new(<span class="macro">vec!</span>[_mock_archiver]));
-        <span class="kw">let </span>liberdus = Liberdus::new(Arc::new(crypto::ShardusCrypto::new(<span class="string">"69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc"</span>)), archivers, config);
+        <span class="kw">let </span>liberdus = Liberdus::new(
+            Arc::new(crypto::ShardusCrypto::new(
+                <span class="string">"69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc"</span>,
+            )),
+            archivers,
+            config,
+        );
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">500 </span>{
             <span class="kw">let </span>node = Consensor {
@@ -1169,34 +1306,44 @@
                 rng_bias: <span class="prelude-val">None</span>,
             };
             nodes.push(node);
-        };
+        }
 
         liberdus.active_nodelist.write().<span class="kw">await</span>.extend(nodes);
 
-        liberdus.round_robin_index.store(<span class="number">1999</span>, std::sync::atomic::Ordering::Relaxed);
+        liberdus
+            .round_robin_index
+            .store(<span class="number">1999</span>, std::sync::atomic::Ordering::Relaxed);
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">500 </span>{
             <span class="comment">//this artificially sets the round trip time for each node
             // specifically making lower indices have lower round trip time
-            </span>liberdus.set_consensor_trip_ms(i.to_string(), (i * <span class="number">10</span>).min(liberdus.config.max_http_timeout_ms));
+            </span>liberdus.set_consensor_trip_ms(
+                i.to_string(),
+                (i * <span class="number">10</span>).min(liberdus.config.max_http_timeout_ms),
+            );
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
 
         liberdus.prepare_list().<span class="kw">await</span>;
 
-        <span class="macro">println!</span>(<span class="string">"Cumulative weight {}"</span>, liberdus.load_distribution_commulative_bias.read().<span class="kw">await</span>.last().unwrap());
+        <span class="macro">println!</span>(
+            <span class="string">"Cumulative weight {}"</span>,
+            liberdus
+                .load_distribution_commulative_bias
+                .read()
+                .<span class="kw">await
+                </span>.last()
+                .unwrap()
+        );
 
         <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..<span class="number">3000 </span>{
             <span class="kw">let </span>(index, <span class="kw">_</span>) = liberdus.get_random_consensor_biased().<span class="kw">await</span>.unwrap();
             <span class="macro">println!</span>(<span class="string">"{}"</span>, index);
             <span class="macro">assert_eq!</span>(<span class="bool-val">true</span>, <span class="bool-val">true</span>);
         }
-
     }
 }
-
-
 
 <span class="doccomment">/// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -1216,7 +1363,8 @@
     liberdus: Arc&lt;Liberdus&gt;,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
-<span class="kw">where </span>S: AsyncWrite + AsyncRead + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncWrite + AsyncRead + Unpin + Send,
 {
     <span class="comment">// Get the next appropriate consensor from liberdus
     </span><span class="kw">let </span>(<span class="kw">_</span>, target_server) = <span class="kw">match </span>liberdus.get_next_appropriate_consensor().<span class="kw">await </span>{
@@ -1228,12 +1376,19 @@
         }
     };
 
-    <span class="kw">let </span>ip_port = <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, target_server.ip.clone(), target_server.port.clone());
+    <span class="kw">let </span>ip_port = <span class="macro">format!</span>(
+        <span class="string">"{}:{}"</span>,
+        target_server.ip.clone(),
+        target_server.port.clone()
+    );
 
-    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), TcpStream::connect(ip_port)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; {
-            stream
-        },
+    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(
+        Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64),
+        TcpStream::connect(ip_port),
+    )
+    .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; stream,
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error connecting to target server: {}"</span>, e);
             http::respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1249,30 +1404,31 @@
     <span class="comment">// Forward the client's request to the server
     </span><span class="kw">let </span>now = std::time::Instant::now();
     <span class="kw">let </span><span class="kw-2">mut </span>response_data = <span class="macro">vec!</span>[];
-    <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), server_stream.write_all(<span class="kw-2">&amp;</span>request_buffer)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-            <span class="kw">match </span>http::collect_http(<span class="kw-2">&amp;mut </span>server_stream, <span class="kw-2">&amp;mut </span>response_data).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    <span class="kw">let </span>elapsed = now.elapsed();
-                    liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">eprintln!</span>(<span class="string">"Error reading response from server: {}"</span>, e);
-                    http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-                    liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-                }
+    <span class="kw">match </span>timeout(
+        Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64),
+        server_stream.write_all(<span class="kw-2">&amp;</span>request_buffer),
+    )
+    .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; <span class="kw">match </span>http::collect_http(<span class="kw-2">&amp;mut </span>server_stream, <span class="kw-2">&amp;mut </span>response_data).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(()) =&gt; {
+                <span class="kw">let </span>elapsed = now.elapsed();
+                liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+                tokio::spawn(<span class="kw">async move </span>{
+                    server_stream.shutdown().<span class="kw">await</span>.unwrap();
+                    drop(server_stream);
+                });
             }
-
-
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">"Error reading response from server: {}"</span>, e);
+                http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+                liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+                tokio::spawn(<span class="kw">async move </span>{
+                    server_stream.shutdown().<span class="kw">await</span>.unwrap();
+                    drop(server_stream);
+                });
+                <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
+            }
         },
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error forwarding request to server: {}"</span>, e);
@@ -1305,11 +1461,13 @@
         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Empty response from server"</span>.into());
     }
 
-
     http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Connection"</span>, <span class="string">"keep-alive"</span>);
-    http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Keep-Alive"</span>, <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str());
+    http::set_http_header(
+        <span class="kw-2">&amp;mut </span>response_data,
+        <span class="string">"Keep-Alive"</span>,
+        <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str(),
+    );
     http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Access-Control-Allow-Origin"</span>, <span class="string">"*"</span>);
-
 
     <span class="comment">// Relay the collected response to the client
     </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_stream.write_all(<span class="kw-2">&amp;</span>response_data).<span class="kw">await </span>{

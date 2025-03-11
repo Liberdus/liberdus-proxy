@@ -261,9 +261,89 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, sync::RwLock};
-<span class="kw">use crate</span>::{config, http, liberdus::Liberdus};
-<span class="kw">use </span>std::{collections::HashMap, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{config, http, liberdus::Liberdus};
+<span class="kw">use </span>std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+<span class="kw">use </span>tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    sync::RwLock,
+};
 <span class="kw">use </span>tokio::{net::TcpStream, time::timeout};
 <span class="doccomment">/// Handles the client request stream by reading the request, forwarding it to a consensor server,
 /// collect the response from validator, and relaying it back to the client.
@@ -283,9 +363,9 @@
     client_stream: <span class="kw-2">&amp;mut </span>S,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
-<span class="kw">where </span>S: AsyncWrite + AsyncRead + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncWrite + AsyncRead + Unpin + Send,
 {
-
     <span class="kw">let </span>cache_map = CACHE_MAP.get_or_init(init_caches);
 
     <span class="kw">let </span>cache = cache_map.get(<span class="kw-2">&amp;</span>route).unwrap().read().<span class="kw">await</span>;
@@ -294,14 +374,22 @@
 
     drop(cache);
 
-
     <span class="comment">// Forward the client's request to the server
     </span><span class="kw">let </span><span class="kw-2">mut </span>response_data = {
-        <span class="kw">let </span>date_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        <span class="kw">let </span>date_now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
         <span class="kw">if </span>payload.buffer.is_none() || (date_now - payload.timestamp) &gt; payload.lifespan <span class="kw">as </span>u128 {
             <span class="macro">println!</span>(<span class="string">"Cold fetch for route: {}"</span>, route);
             <span class="kw">let </span><span class="kw-2">mut </span>server_resp_buffer = Vec::new();
-            cold_fetch(client_stream, <span class="kw-2">&amp;mut </span>server_resp_buffer, config.clone(), route.as_str()).<span class="kw">await</span><span class="question-mark">?</span>;
+            cold_fetch(
+                client_stream,
+                <span class="kw-2">&amp;mut </span>server_resp_buffer,
+                config.clone(),
+                route.as_str(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">if </span>route == <span class="string">"/api/report" </span>{
                 <span class="kw">let </span>body = http::extract_body(<span class="kw-2">&amp;</span>server_resp_buffer);
@@ -313,24 +401,37 @@
                         <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
                     }
                 };
-        
+
                 <span class="kw">for </span>(<span class="kw">_</span>, node) <span class="kw">in </span>report.nodes.active.iter_mut() {
-                    node.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                    node.timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis();
                     node.reportInterval = payload.lifespan;
                 }
-                   
+
                 <span class="kw">for </span>(<span class="kw">_</span>, node) <span class="kw">in </span>report.nodes.syncing.iter_mut() {
-                    node.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                    node.timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis();
                 }
-                   
-                report.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-        
+
+                report.timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+
                 server_resp_buffer = serde_json::to_vec(<span class="kw-2">&amp;</span>report).unwrap();
             };
 
-            cache_map.get(<span class="kw-2">&amp;</span>route).unwrap().write().<span class="kw">await</span>.set(server_resp_buffer.clone());
+            cache_map
+                .get(<span class="kw-2">&amp;</span>route)
+                .unwrap()
+                .write()
+                .<span class="kw">await
+                </span>.set(server_resp_buffer.clone());
             server_resp_buffer
-
         } <span class="kw">else </span>{
             payload.buffer.unwrap()
         }
@@ -342,18 +443,19 @@
     //     route
     // };
 
-
     </span><span class="kw">if </span>response_data.is_empty() {
         <span class="macro">eprintln!</span>(<span class="string">"Empty response from server."</span>);
         http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Empty response from server"</span>.into());
     }
 
-
     http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Connection"</span>, <span class="string">"keep-alive"</span>);
-    http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Keep-Alive"</span>, <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str());
+    http::set_http_header(
+        <span class="kw-2">&amp;mut </span>response_data,
+        <span class="string">"Keep-Alive"</span>,
+        <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str(),
+    );
     http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Access-Control-Allow-Origin"</span>, <span class="string">"*"</span>);
-
 
     <span class="comment">// Relay the collected response to the client
     </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_stream.write_all(<span class="kw-2">&amp;</span>response_data).<span class="kw">await </span>{
@@ -387,20 +489,24 @@
 }
 
 <span class="kw">async fn </span>cold_fetch&lt;S&gt;(
-    client_stream: <span class="kw-2">&amp;mut </span>S, 
+    client_stream: <span class="kw-2">&amp;mut </span>S,
     server_resp_buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;,
-    config: Arc&lt;config::Config&gt;, 
-    route: <span class="kw-2">&amp;</span>str, 
+    config: Arc&lt;config::Config&gt;,
+    route: <span class="kw-2">&amp;</span>str,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
-<span class="kw">where </span>S: AsyncRead + AsyncWrite + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncRead + AsyncWrite + Unpin + Send,
 {
     <span class="kw">let </span>upstream_ip = config.shardus_monitor.upstream_ip.clone();
     <span class="kw">let </span>upstream_port = config.shardus_monitor.upstream_port.clone();
     <span class="kw">let </span>ip_port = <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, upstream_ip, upstream_port);
-    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64), TcpStream::connect(ip_port)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; {
-            stream
-        },
+    <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(
+        Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64),
+        TcpStream::connect(ip_port),
+    )
+    .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(stream)) =&gt; stream,
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error connecting to target server: {}"</span>, e);
             http::respond_with_timeout(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -413,35 +519,35 @@
         }
     };
 
-
     <span class="kw">let </span>emulated_request = <span class="macro">format!</span>(
         <span class="string">"GET {} HTTP/1.1\r\nHost: {}:{}\r\n\r\n"</span>,
-        route,
-        upstream_ip,
-        upstream_port
-    ).into_bytes().to_vec();
+        route, upstream_ip, upstream_port
+    )
+    .into_bytes()
+    .to_vec();
 
-    <span class="kw">match </span>timeout(Duration::from_millis((config.max_http_timeout_ms * <span class="number">2</span>) <span class="kw">as </span>u64), server_stream.write_all(<span class="kw-2">&amp;</span>emulated_request)).<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-            <span class="kw">match </span>http::collect_http(<span class="kw-2">&amp;mut </span>server_stream, server_resp_buffer).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(()) =&gt; {
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                },
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">eprintln!</span>(<span class="string">"Error reading response from server: {}"</span>, e);
-                    http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
-                    tokio::spawn(<span class="kw">async move </span>{
-                        server_stream.shutdown().<span class="kw">await</span>.unwrap();
-                        drop(server_stream);
-                    });
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
-                }
+    <span class="kw">match </span>timeout(
+        Duration::from_millis((config.max_http_timeout_ms * <span class="number">2</span>) <span class="kw">as </span>u64),
+        server_stream.write_all(<span class="kw-2">&amp;</span>emulated_request),
+    )
+    .<span class="kw">await
+    </span>{
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; <span class="kw">match </span>http::collect_http(<span class="kw-2">&amp;mut </span>server_stream, server_resp_buffer).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(()) =&gt; {
+                tokio::spawn(<span class="kw">async move </span>{
+                    server_stream.shutdown().<span class="kw">await</span>.unwrap();
+                    drop(server_stream);
+                });
             }
-
-
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">"Error reading response from server: {}"</span>, e);
+                http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+                tokio::spawn(<span class="kw">async move </span>{
+                    server_stream.shutdown().<span class="kw">await</span>.unwrap();
+                    drop(server_stream);
+                });
+                <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
+            }
         },
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error forwarding request to server: {}"</span>, e);
@@ -482,7 +588,10 @@
     }
     <span class="kw">pub fn </span>set(<span class="kw-2">&amp;mut </span><span class="self">self</span>, payload: Vec&lt;u8&gt;) {
         <span class="self">self</span>.buffer = <span class="prelude-val">Some</span>(payload);
-        <span class="self">self</span>.timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+        <span class="self">self</span>.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
     }
 
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PayloadCache {
@@ -494,34 +603,71 @@
     }
 }
 
-<span class="kw">type </span>PayloadCacheMap = Arc&lt;
-    std::collections::HashMap&lt;String, tokio::sync::RwLock&lt;PayloadCache&gt;&gt;
-&gt;;
+<span class="kw">type </span>PayloadCacheMap = Arc&lt;std::collections::HashMap&lt;String, tokio::sync::RwLock&lt;PayloadCache&gt;&gt;&gt;;
 
-    
 <span class="kw">fn </span>init_caches() -&gt; PayloadCacheMap {
-        <span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;String, RwLock&lt;PayloadCache&gt;&gt; = HashMap::new();
-        <span class="kw">let </span>one_minute = <span class="number">60000</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;String, RwLock&lt;PayloadCache&gt;&gt; = HashMap::new();
+    <span class="kw">let </span>one_minute = <span class="number">60000</span>;
 
-        map.insert(<span class="string">"/style.css"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/app.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/version.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/fabric.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/auth.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/favicon.ico"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/axios.min.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/popmotion.min.js"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/api/report"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)));
-        map.insert(<span class="string">"/api/status"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)));
-        map.insert(<span class="string">"/api/version"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)));
-        map.insert(<span class="string">"/milky-way2.png"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/logo.png"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
-        map.insert(<span class="string">"/"</span>.to_string(), RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)));
+    map.insert(
+        <span class="string">"/style.css"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/app.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/version.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/fabric.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/auth.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/favicon.ico"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/axios.min.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/popmotion.min.js"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/api/report"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)),
+    );
+    map.insert(
+        <span class="string">"/api/status"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)),
+    );
+    map.insert(
+        <span class="string">"/api/version"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">2</span>)),
+    );
+    map.insert(
+        <span class="string">"/milky-way2.png"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/logo.png"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
+    map.insert(
+        <span class="string">"/"</span>.to_string(),
+        RwLock::new(PayloadCache::new(one_minute * <span class="number">30</span>)),
+    );
 
-        Arc::new(map)
-
+    Arc::new(map)
 }
 
 <span class="kw">pub static </span>CACHE_MAP: std::sync::OnceLock&lt;PayloadCacheMap&gt; = std::sync::OnceLock::new();
-
 </code></pre></div></section></main></body></html>

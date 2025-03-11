@@ -295,6 +295,36 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -312,20 +342,20 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-</span><span class="kw">use </span>tokio::net::TcpStream;
-<span class="kw">use </span>tokio::sync::RwLock;
+</span><span class="kw">use crate</span>::{config, liberdus, shardus_monitor, Stats};
 <span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncRead, AsyncWrite};
+<span class="kw">use </span>tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+<span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio::time::{timeout, Duration};
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
-<span class="kw">use crate</span>::{Stats, liberdus, config, shardus_monitor};
-
 
 <span class="doccomment">/// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
 </span><span class="kw">pub async fn </span>collect_http&lt;S&gt;(stream: <span class="kw-2">&amp;mut </span>S, buffer: <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
-<span class="kw">where </span>S: AsyncRead + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncRead + Unpin + Send,
 {
     <span class="kw">const </span>TEMP_BUFFER_SIZE: usize = <span class="number">1024</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>temp_buffer = [<span class="number">0</span>; TEMP_BUFFER_SIZE];
@@ -337,7 +367,10 @@
         </span><span class="kw">let </span>n = stream.read(<span class="kw-2">&amp;mut </span>temp_buffer).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>n == <span class="number">0 </span>{
             <span class="kw">if </span>!headers_read {
-                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, <span class="string">"Stream closed"</span>));
+                <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    <span class="string">"Stream closed"</span>,
+                ));
             }
             <span class="kw">break</span>; <span class="comment">// Stream closed
         </span>}
@@ -360,7 +393,11 @@
 
         <span class="comment">// Stop reading if content length is known and body is fully read
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(length) = content_length {
-            <span class="kw">let </span>body_start = buffer.windows(<span class="number">4</span>).position(|w| w == <span class="string">b"\r\n\r\n"</span>).unwrap_or(<span class="number">0</span>) + <span class="number">4</span>;
+            <span class="kw">let </span>body_start = buffer
+                .windows(<span class="number">4</span>)
+                .position(|w| w == <span class="string">b"\r\n\r\n"</span>)
+                .unwrap_or(<span class="number">0</span>)
+                + <span class="number">4</span>;
             <span class="kw">if </span>buffer.len() &gt;= body_start + length {
                 <span class="kw">break</span>;
             }
@@ -369,7 +406,10 @@
         <span class="comment">// Optional: Limit the buffer size to prevent potential DoS attacks
         </span><span class="kw">const </span>MAX_PAYLOAD_SIZE: usize = <span class="number">1024 </span>* <span class="number">1024</span>; <span class="comment">// 1 MB
         </span><span class="kw">if </span>buffer.len() &gt; MAX_PAYLOAD_SIZE {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(std::io::ErrorKind::InvalidData, <span class="string">"Payload too large"</span>));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                <span class="string">"Payload too large"</span>,
+            ));
         }
     }
 
@@ -382,32 +422,43 @@
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
-<span class="kw">where </span>StreamLike: AsyncWrite + AsyncRead + Unpin + Send
+<span class="kw">where
+    </span>StreamLike: AsyncWrite + AsyncRead + Unpin + Send,
 {
     <span class="kw">loop </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>req_buf = Vec::new();
-        <span class="kw">match </span>timeout(Duration::from_secs(config.tcp_keepalive_time_sec.into()), collect_http(<span class="kw-2">&amp;mut </span>client_stream, <span class="kw-2">&amp;mut </span>req_buf)).<span class="kw">await </span>{
+        <span class="kw">match </span>timeout(
+            Duration::from_secs(config.tcp_keepalive_time_sec.into()),
+            collect_http(<span class="kw-2">&amp;mut </span>client_stream, <span class="kw-2">&amp;mut </span>req_buf),
+        )
+        .<span class="kw">await
+        </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
                 <span class="kw">let </span>route = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap_or(<span class="string">"/"</span>.to_string());
 
                 <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(<span class="kw-2">&amp;</span>route) {
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
-                        req_buf, 
+                        req_buf,
                         route,
-                        <span class="kw-2">&amp;mut </span>client_stream, 
-                        config.clone()
-                        ).<span class="kw">await </span>{
+                        <span class="kw-2">&amp;mut </span>client_stream,
+                        config.clone(),
+                    )
+                    .<span class="kw">await
+                    </span>{
                         <span class="macro">eprintln!</span>(<span class="string">"Error handling monitor request: {}"</span>, e);
                     }
-
-                }
-                <span class="kw">else</span>{
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, liberdus.clone(), config.clone()).<span class="kw">await </span>{
+                } <span class="kw">else </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
+                        req_buf,
+                        <span class="kw-2">&amp;mut </span>client_stream,
+                        liberdus.clone(),
+                        config.clone(),
+                    )
+                    .<span class="kw">await
+                    </span>{
                         <span class="macro">eprintln!</span>(<span class="string">"Error handling liberdus request: {}"</span>, e);
                     }
                 }
-
-
             }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error attempting to read bytes out of client stream: {}"</span>, e);
@@ -418,15 +469,11 @@
                 <span class="kw">break</span>;
             }
         }
-
     }
 
-
     <span class="kw">match </span>client_stream.shutdown().<span class="kw">await </span>{
-        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {<span class="prelude-val">Ok</span>(())},
-        <span class="prelude-val">Err</span>(_e) =&gt; {
-            <span class="prelude-val">Ok</span>(())
-        }
+        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+        <span class="prelude-val">Err</span>(_e) =&gt; <span class="prelude-val">Ok</span>(()),
     }
 }
 
@@ -436,7 +483,10 @@
         <span class="comment">// Locate the end of the headers
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(headers_end) = buffer_str.find(<span class="string">"\r\n\r\n"</span>) {
             <span class="comment">// Collect headers as a vector of Strings
-            </span><span class="kw">let </span><span class="kw-2">mut </span>headers: Vec&lt;String&gt; = buffer_str[..headers_end].lines().map(String::from).collect();
+            </span><span class="kw">let </span><span class="kw-2">mut </span>headers: Vec&lt;String&gt; = buffer_str[..headers_end]
+                .lines()
+                .map(String::from)
+                .collect();
             <span class="kw">let </span>header_prefix = <span class="macro">format!</span>(<span class="string">"{}:"</span>, key);
             <span class="kw">let </span><span class="kw-2">mut </span>found = <span class="bool-val">false</span>;
 
@@ -480,20 +530,22 @@
 
 <span class="doccomment">/// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
 </span><span class="kw">pub async fn </span>respond_with_internal_error&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
-<span class="kw">where </span>S: AsyncWrite + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncWrite + Unpin + Send,
 {
-    <span class="kw">let </span>response = <span class="string">"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
+    <span class="kw">let </span>response =
+        <span class="string">"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
     client_stream.write_all(response.as_bytes()).<span class="kw">await
 </span>}
 
 <span class="doccomment">/// Takes the stream, responds with a timeout error, and shutdown tcp
 </span><span class="kw">pub async fn </span>respond_with_timeout&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
-<span class="kw">where </span>S: AsyncWrite + Unpin + Send
+<span class="kw">where
+    </span>S: AsyncWrite + Unpin + Send,
 {
     <span class="kw">let </span>response = <span class="string">"HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
     client_stream.write_all(response.as_bytes()).<span class="kw">await
 </span>}
-
 
 <span class="comment">// without host
 </span><span class="kw">pub fn </span>get_route(buffer: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
@@ -512,23 +564,30 @@
     route
 }
 
-
 <span class="kw">pub async fn </span>listen(
-    liberdus: Arc&lt;liberdus::Liberdus&gt;, 
-    config: Arc&lt;config::Config&gt;, 
-    server_stats: Arc&lt;Stats&gt;, 
-    tls_acceptor: <span class="prelude-ty">Option</span>&lt;TlsAcceptor&gt;
+    liberdus: Arc&lt;liberdus::Liberdus&gt;,
+    config: Arc&lt;config::Config&gt;,
+    server_stats: Arc&lt;Stats&gt;,
+    tls_acceptor: <span class="prelude-ty">Option</span>&lt;TlsAcceptor&gt;,
 ) {
     <span class="comment">// let semaphore = Arc::new(Semaphore::new(300));
 
-    </span><span class="kw">let </span>listener = <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port.clone())).<span class="kw">await </span>{
+    </span><span class="kw">let </span>listener = <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(
+        <span class="string">"0.0.0.0:{}"</span>,
+        config.http_port.clone()
+    ))
+    .<span class="kw">await
+    </span>{
         <span class="prelude-val">Ok</span>(l) =&gt; l,
         <span class="prelude-val">Err</span>(e) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"Error binding to port: {}"</span>, e);
             std::process::exit(<span class="number">1</span>);
         }
     };
-    <span class="macro">println!</span>(<span class="string">"HTTP Listening on: {}"</span>, listener.local_addr().expect(<span class="string">"Couldn't bind to a port"</span>));
+    <span class="macro">println!</span>(
+        <span class="string">"HTTP Listening on: {}"</span>,
+        listener.local_addr().expect(<span class="string">"Couldn't bind to a port"</span>)
+    );
 
     <span class="kw">loop </span>{
         <span class="kw">let </span>(raw_stream, <span class="kw">_</span>) = <span class="kw">match </span>listener.accept().<span class="kw">await </span>{
@@ -538,7 +597,6 @@
                 <span class="kw">continue</span>;
             }
         };
-
 
         <span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span>liberdus);
         <span class="kw">let </span>config = Arc::clone(<span class="kw-2">&amp;</span>config);
@@ -550,24 +608,25 @@
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="comment">// let permit = throttler.acquire().await.unwrap();
-            </span>stats.stream_count.fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-            
+            </span>stats
+                .stream_count
+                .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
 
             <span class="kw">match </span>tls_acceptor {
-                <span class="prelude-val">Some</span>(tls_acceptor) =&gt; {
-                    <span class="kw">match </span>tls_acceptor.accept(raw_stream).<span class="kw">await</span>{
-                        <span class="prelude-val">Ok</span>(tls_stream) =&gt; {
-                            <span class="kw">let </span>tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                            <span class="kw">let </span>e = handle_stream(tls_stream, liberdus, config).<span class="kw">await</span>;
-                            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
-                                <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {}"</span>, e);
-                            }
-                        },
-                        <span class="prelude-val">Err</span>(e) =&gt; {
-                            <span class="macro">eprintln!</span>(<span class="string">"TLS Handshake Error: {}"</span>, e);
-                            stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
-                            <span class="kw">return
-                        </span>}
+                <span class="prelude-val">Some</span>(tls_acceptor) =&gt; <span class="kw">match </span>tls_acceptor.accept(raw_stream).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(tls_stream) =&gt; {
+                        <span class="kw">let </span>tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                        <span class="kw">let </span>e = handle_stream(tls_stream, liberdus, config).<span class="kw">await</span>;
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
+                            <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {}"</span>, e);
+                        }
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">eprintln!</span>(<span class="string">"TLS Handshake Error: {}"</span>, e);
+                        stats
+                            .stream_count
+                            .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+                        <span class="kw">return</span>;
                     }
                 },
                 <span class="prelude-val">None </span>=&gt; {
@@ -577,9 +636,10 @@
                     }
                 }
             }
-            stats.stream_count.fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
+            stats
+                .stream_count
+                .fetch_sub(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
         });
-
     }
 }
 

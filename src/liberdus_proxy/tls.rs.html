@@ -39,13 +39,19 @@
 <a href="#39" id="39">39</a>
 <a href="#40" id="40">40</a>
 <a href="#41" id="41">41</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>tokio_rustls::rustls::{pki_types::CertificateDer, pki_types::PrivateKeyDer, ServerConfig};
-<span class="kw">use </span>rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
 <span class="kw">use </span>std::fs::File;
 <span class="kw">use </span>std::io::{BufReader, Read};
+<span class="kw">use </span>tokio_rustls::rustls::{pki_types::CertificateDer, pki_types::PrivateKeyDer, ServerConfig};
 
 <span class="comment">// Configure TLS using paths from config
-</span><span class="kw">pub fn </span>configure_tls(cert_path: <span class="kw-2">&amp;</span>str, key_path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;ServerConfig, Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+</span><span class="kw">pub fn </span>configure_tls(
+    cert_path: <span class="kw-2">&amp;</span>str,
+    key_path: <span class="kw-2">&amp;</span>str,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ServerConfig, Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
     <span class="comment">// Load and parse the certificate
     </span><span class="kw">let </span>cert_file = File::open(cert_path)<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>cert_reader = BufReader::new(cert_file);
