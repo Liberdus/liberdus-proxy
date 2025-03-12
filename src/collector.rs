@@ -64,7 +64,6 @@ struct CollectorAccountResp {
     accounts: Vec<serde_json::Value>,
 }
 
-
 /// Fetches a specific transaction by its ID.
 ///
 /// # Parameters
@@ -164,7 +163,9 @@ pub async fn get_account_by_address(collector_ip: &str, collector_port: &str, ac
     };
 
     if result.accounts.len() > 0 {
-        Ok(result.accounts[0].clone())
+        // grab `data` from the first account
+        let account = result.accounts[0].get("data").unwrap();
+        Ok(account.clone())
     } else {
         Err("Account not found".to_string())
     }

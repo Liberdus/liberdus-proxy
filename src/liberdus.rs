@@ -455,7 +455,6 @@ impl Liberdus {
         ).await.unwrap_or(serde_json::Value::Bool(false));
 
         if account != serde_json::Value::Bool(false) {
-            println!("Account found in local collector");
             return Ok(account);
         }
 
