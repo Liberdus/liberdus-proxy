@@ -196,6 +196,7 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module provides utilities to interact with a transaction collector API.
 //! 
 //! The module includes:
@@ -261,7 +262,6 @@
     <span class="doccomment">/// The transaction data as a JSON value.
     </span>accounts: Vec&lt;serde_json::Value&gt;,
 }
-
 
 <span class="doccomment">/// Fetches a specific transaction by its ID.
 ///
@@ -362,7 +362,9 @@
     };
 
     <span class="kw">if </span>result.accounts.len() &gt; <span class="number">0 </span>{
-        <span class="prelude-val">Ok</span>(result.accounts[<span class="number">0</span>].clone())
+        <span class="comment">// grab `data` from the first account
+        </span><span class="kw">let </span>account = result.accounts[<span class="number">0</span>].get(<span class="string">"data"</span>).unwrap();
+        <span class="prelude-val">Ok</span>(account.clone())
     } <span class="kw">else </span>{
         <span class="prelude-val">Err</span>(<span class="string">"Account not found"</span>.to_string())
     }
