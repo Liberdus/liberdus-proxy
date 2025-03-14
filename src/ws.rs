@@ -5,7 +5,6 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsAcceptor;
-use tokio_tungstenite;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -68,7 +67,7 @@ pub async fn listen(
     // let semaphore = Arc::new(Semaphore::new(300));
 
     let listener =
-        match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port.clone() + 1))
+        match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port + 1))
             .await
         {
             Ok(l) => l,
