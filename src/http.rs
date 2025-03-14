@@ -16,11 +16,8 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 use crate::{config, liberdus, shardus_monitor, Stats};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio::sync::RwLock;
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsAcceptor;
 
@@ -107,7 +104,8 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let route = get_route(&req_buf).unwrap_or("/".to_string());
+
+                let (method, route) = get_route(&req_buf).unwrap();
 
                 if shardus_monitor::proxy::is_monitor_route(&route) {
                     if let Err(e) = shardus_monitor::proxy::handle_request(
@@ -221,22 +219,31 @@ where
 }
 
 // without host
-pub fn get_route(buffer: &[u8]) -> Option<String> {
+pub fn get_route(buffer: &[u8]) -> Option<(String, String)> {
     let mut route = None;
+    let mut method = None;
+
     if let Ok(buffer_str) = std::str::from_utf8(buffer) {
         for line in buffer_str.lines() {
-            if let Some(value) = line.strip_prefix("GET ") {
-                let mut parts = value.split_whitespace();
-                if let Some(path) = parts.next() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                let http_method = parts[0]; // GET, POST, DELETE, etc.
+                let path = parts[1]; // The requested path
+
+                if matches!(http_method, "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD") {
+                    method = Some(http_method.to_string());
                     route = Some(path.to_string());
                     break;
                 }
             }
         }
     }
-    route
-}
 
+    match (method, route) {
+        (Some(m), Some(r)) => Some((m, r)),
+        _ => None,
+    }
+}
 pub async fn listen(
     liberdus: Arc<liberdus::Liberdus>,
     config: Arc<config::Config>,
