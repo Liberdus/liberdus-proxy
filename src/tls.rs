@@ -1,6 +1,6 @@
 use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 use tokio_rustls::rustls::{pki_types::CertificateDer, pki_types::PrivateKeyDer, ServerConfig};
 
 // Configure TLS using paths from config
@@ -13,7 +13,7 @@ pub fn configure_tls(
     let mut cert_reader = BufReader::new(cert_file);
     let certs = certs(&mut cert_reader)?
         .into_iter()
-        .map(|c| CertificateDer::from(c))
+        .map(CertificateDer::from)
         .collect::<Vec<CertificateDer>>();
 
     if certs.is_empty() {

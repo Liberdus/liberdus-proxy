@@ -117,17 +117,15 @@ where
                     {
                         eprintln!("Error handling monitor request: {}", e);
                     }
-                } else {
-                    if let Err(e) = liberdus::handle_request(
-                        req_buf,
-                        &mut client_stream,
-                        liberdus.clone(),
-                        config.clone(),
-                    )
-                    .await
-                    {
-                        eprintln!("Error handling liberdus request: {}", e);
-                    }
+                } else if let Err(e) = liberdus::handle_request(
+                    req_buf,
+                    &mut client_stream,
+                    liberdus.clone(),
+                    config.clone(),
+                )
+                .await
+                {
+                    eprintln!("Error handling liberdus request: {}", e);
                 }
             }
             Ok(Err(e)) => {

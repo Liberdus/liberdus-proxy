@@ -16,10 +16,6 @@
 //! - [`get_message`]: Placeholder for message-related functionality.
 //! - [`insert_field`]: Inserts a key-value pair into a JSON object.
 
-use crate::liberdus;
-use reqwest;
-use serde;
-use serde_json;
 
 /// Represents the API response for transaction queries.
 #[derive(serde::Deserialize)]
@@ -90,28 +86,28 @@ pub async fn get_transaction(
 
     let result: Option<TxResp> = match resp.status() {
         reqwest::StatusCode::OK => {
-            let json = match resp.json().await {
+            
+
+            match resp.json().await {
                 Ok(json) => json,
                 Err(_) => {
                     return None;
                 }
-            };
-
-            json
+            }
         }
         _ => None,
     };
 
-    return match result {
+    match result {
         Some(result) => {
-            if result.success? && result.transactions.len() > 0 {
+            if result.success? && !result.transactions.is_empty() {
                 Some(result.transactions[0].originalTxData.tx.clone())
             } else {
                 None
             }
         }
         None => None,
-    };
+    }
 }
 
 /// Fetches the transaction history for a specific account.
@@ -185,7 +181,7 @@ pub async fn get_account_by_address(
         status => return Err(format!("HTTP error: {}", status)),
     };
 
-    if result.accounts.len() > 0 {
+    if !result.accounts.is_empty() {
         // grab `data` from the first account
         let account = result.accounts[0].get("data").unwrap();
         Ok(account.clone())

@@ -1,4 +1,4 @@
-use crate::{config, http, liberdus::Liberdus};
+use crate::{config, http};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -162,7 +162,7 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send,
 {
     let upstream_ip = config.shardus_monitor.upstream_ip.clone();
-    let upstream_port = config.shardus_monitor.upstream_port.clone();
+    let upstream_port = config.shardus_monitor.upstream_port;
     let ip_port = format!("{}:{}", upstream_ip, upstream_port);
     let mut server_stream = match timeout(
         Duration::from_millis(config.max_http_timeout_ms as u64),
@@ -261,8 +261,8 @@ impl PayloadCache {
     pub fn get(&self) -> PayloadCache {
         PayloadCache {
             buffer: self.buffer.clone(),
-            timestamp: self.timestamp.clone(),
-            lifespan: self.lifespan.clone(),
+            timestamp: self.timestamp,
+            lifespan: self.lifespan,
         }
     }
 }

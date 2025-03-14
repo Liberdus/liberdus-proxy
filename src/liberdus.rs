@@ -2,9 +2,7 @@
 use crate::crypto;
 use crate::{archivers, collector, config, http};
 use rand::prelude::*;
-use reqwest;
 use serde::{self, Deserialize, Serialize};
-use serde_json;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -200,7 +198,7 @@ impl Liberdus {
             return 1.0; // All timeouts are the same
         }
         let timetaken_ms_f = timetaken_ms as f64;
-        let min_timeout_f = 0.0 as f64;
+        let min_timeout_f = 0.0_f64;
         let max_timeout_f = max_timeout as f64;
         1.0 - (timetaken_ms_f - min_timeout_f) / (max_timeout_f - min_timeout_f)
     }
@@ -261,7 +259,6 @@ impl Liberdus {
         if self
             .list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == true
         {
             return;
         }
@@ -314,10 +311,9 @@ impl Liberdus {
     /// this function required the list to be sorted and bias values are calculated prior
     /// return None otherwise.
     async fn get_random_consensor_biased(&self) -> Option<(usize, Consensor)> {
-        if self
+        if !self
             .list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == false
         {
             return None;
         }
@@ -376,12 +372,11 @@ impl Liberdus {
                 .len()
                 == self.active_nodelist.read().await.len())
         {
-            true => return self.get_random_consensor_biased().await,
+            true => self.get_random_consensor_biased().await,
             false => {
                 let index = self
                     .round_robin_index
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    .clone();
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                 let nodes = self.active_nodelist.read().await;
                 if index >= nodes.len() {
@@ -393,7 +388,7 @@ impl Liberdus {
                     self.prepare_list().await;
                     return self.get_random_consensor_biased().await;
                 }
-                return Some((index, nodes[index].clone()));
+                Some((index, nodes[index].clone()))
             }
         }
     }
@@ -403,7 +398,6 @@ impl Liberdus {
         if self
             .list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == true
         {
             return;
         }
@@ -473,7 +467,8 @@ impl Liberdus {
         let url = format!("http://{}:{}/account/{}", node.ip, node.port, address);
         let account = match reqwest::get(&url).await {
             Ok(r) => {
-                let parsed = match r.json::<GetAccountResp>().await {
+                
+                match r.json::<GetAccountResp>().await {
                     Ok(p) => p.account,
                     Err(e) => {
                         eprintln!("Failed to parse account: {}", e);
@@ -482,8 +477,7 @@ impl Liberdus {
                             "Failed to parse account",
                         ));
                     }
-                };
-                parsed
+                }
             }
             Err(e) => {
                 eprintln!("Failed to get account: {}", e);
@@ -494,7 +488,7 @@ impl Liberdus {
             }
         };
 
-        return Ok(account);
+        Ok(account)
     }
 }
 
