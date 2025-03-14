@@ -1,6 +1,6 @@
 //! This module contains the node management logic require for load balancing with consensor nodes
 use crate::crypto;
-use crate::{archivers, config, http, collector};
+use crate::{archivers, collector, config, http};
 use rand::prelude::*;
 use reqwest;
 use serde::{self, Deserialize, Serialize};
@@ -446,18 +446,20 @@ impl Liberdus {
         address: &str,
     ) -> Result<serde_json::Value, std::io::Error> {
         let collecotr_ip = self.config.local_source.collector_api_ip.clone();
-        let collector_port = self.config.local_source.collector_api_port.clone().to_string();
+        let collector_port = self
+            .config
+            .local_source
+            .collector_api_port
+            .clone()
+            .to_string();
 
-        let account = collector::get_account_by_address(
-            &collecotr_ip,
-            &collector_port,
-            address,
-        ).await.unwrap_or(serde_json::Value::Bool(false));
+        let account = collector::get_account_by_address(&collecotr_ip, &collector_port, address)
+            .await
+            .unwrap_or(serde_json::Value::Bool(false));
 
         if account != serde_json::Value::Bool(false) {
             return Ok(account);
         }
-
 
         let node = match self.get_next_appropriate_consensor().await {
             Some(n) => n.1,
