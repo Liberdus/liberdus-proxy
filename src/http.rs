@@ -104,7 +104,6 @@ where
         .await
         {
             Ok(Ok(())) => {
-
                 let (method, route) = get_route(&req_buf).unwrap();
 
                 if shardus_monitor::proxy::is_monitor_route(&route) {
@@ -118,17 +117,15 @@ where
                     {
                         eprintln!("Error handling monitor request: {}", e);
                     }
-                } else {
-                    if let Err(e) = liberdus::handle_request(
-                        req_buf,
-                        &mut client_stream,
-                        liberdus.clone(),
-                        config.clone(),
-                    )
-                    .await
-                    {
-                        eprintln!("Error handling liberdus request: {}", e);
-                    }
+                } else if let Err(e) = liberdus::handle_request(
+                    req_buf,
+                    &mut client_stream,
+                    liberdus.clone(),
+                    config.clone(),
+                )
+                .await
+                {
+                    eprintln!("Error handling liberdus request: {}", e);
                 }
             }
             Ok(Err(e)) => {
@@ -230,7 +227,10 @@ pub fn get_route(buffer: &[u8]) -> Option<(String, String)> {
                 let http_method = parts[0]; // GET, POST, DELETE, etc.
                 let path = parts[1]; // The requested path
 
-                if matches!(http_method, "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD") {
+                if matches!(
+                    http_method,
+                    "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD"
+                ) {
                     method = Some(http_method.to_string());
                     route = Some(path.to_string());
                     break;

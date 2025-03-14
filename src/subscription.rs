@@ -82,25 +82,19 @@ impl Manager {
     async fn remove_states(&self, addr: UserAccountAddress, socket_id: &ws::SocketId) {
         let mut guard = self.states.write().await;
 
-        match guard.accounts_by_sock.get_mut(socket_id) {
-            Some(a) => {
-                a.remove(&addr);
-                if a.is_empty() {
-                    guard.accounts_by_sock.remove(socket_id);
-                }
+        if let Some(a) = guard.accounts_by_sock.get_mut(socket_id) {
+            a.remove(&addr);
+            if a.is_empty() {
+                guard.accounts_by_sock.remove(socket_id);
             }
-            _ => {}
         }
 
-        match guard.socks_by_account.get_mut(&addr) {
-            Some(s) => {
-                s.remove(socket_id);
-                if s.is_empty() {
-                    guard.socks_by_account.remove(&addr);
-                    guard.last_received.remove(&addr);
-                }
+        if let Some(s) = guard.socks_by_account.get_mut(&addr) {
+            s.remove(socket_id);
+            if s.is_empty() {
+                guard.socks_by_account.remove(&addr);
+                guard.last_received.remove(&addr);
             }
-            _ => {}
         }
     }
 
@@ -182,7 +176,7 @@ impl Manager {
                 let guard = states.read().await;
 
                 let old_timestamp = match guard.last_received.get(&address) {
-                    Some(t) => t.clone(),
+                    Some(t) => *t,
                     None => {
                         // todo purge this address from all entries
                         drop(guard);
@@ -254,13 +248,13 @@ impl Manager {
     }
 
     pub async fn subscribe(&self, socket_id: &ws::SocketId, address: &str) -> bool {
-        match self.is_exist(&address.to_string(), &socket_id).await {
+        match self.is_exist(&address.to_string(), socket_id).await {
             true => {
-                return false;
+                false
             }
             false => {
                 self.set_states(address.to_string(), socket_id).await;
-                return true;
+                true
             }
         }
     }

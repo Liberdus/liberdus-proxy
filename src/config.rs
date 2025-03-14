@@ -1,5 +1,4 @@
 //! Configuration for the rpc server.
-use serde;
 use std::fs;
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -73,7 +72,7 @@ pub struct LocalSource {
 /// path is src/config.json
 impl Config {
     pub fn load() -> Result<Self, String> {
-        let config_file = format!("src/config.json");
+        let config_file = "src/config.json".to_string();
 
         let config_data = fs::read_to_string(&config_file)
             .map_err(|err| format!("Failed to read config file: {}", err))?;

@@ -6,8 +6,6 @@
 //! allowing seamless integration in a highly concurrent environment.
 use crate::config;
 use crate::crypto::ShardusCrypto;
-use reqwest;
-use sodiumoxide;
 use std::fs;
 use std::sync::Arc;
 use tokio::{io::AsyncWriteExt, sync::RwLock};
@@ -81,10 +79,7 @@ impl ArchiverUtil {
     /// inevitably lock the list but it is optimized to minimize the time the lock is held.
     pub async fn discover(self: Arc<Self>) {
         let mut cache: Vec<Archiver> = match fs::read_to_string("known_archiver_cache.json") {
-            Ok(cache) => match serde_json::from_str(&cache) {
-                Ok(cache) => cache,
-                Err(_) => Vec::new(),
-            },
+            Ok(cache) => serde_json::from_str(&cache).unwrap_or_default(),
             Err(_) => Vec::new(),
         };
 
@@ -140,11 +135,8 @@ impl ArchiverUtil {
 
         let mut tmp: Vec<Archiver> = Vec::new();
         while let Some(result) = rx.recv().await {
-            match result {
-                Ok(archivers) => {
-                    tmp.extend(archivers);
-                }
-                Err(_) => {}
+            if let Ok(archivers) = result {
+                tmp.extend(archivers);
             }
         }
 
