@@ -1,25 +1,25 @@
 //! This module provides utilities to interact with a transaction collector API.
-//! 
+//!
 //! The module includes:
 //! - Fetching a specific transaction by its ID.
 //! - Fetching transaction history for a specific account.
 //! - (Planned) Fetching messages.
-//! 
+//!
 //! # Structures
 //! - [`TxResp`]: Represents the API response for transaction queries.
 //! - [`Transaction`]: Represents a single transaction.
 //! - [`OriginalTxData`]: Represents the original data of a transaction.
-//! 
+//!
 //! # Functions
 //! - [`get_transaction`]: Fetches a specific transaction by its ID.
 //! - [`get_transaction_history`]: Fetches the transaction history for a given account.
 //! - [`get_message`]: Placeholder for message-related functionality.
 //! - [`insert_field`]: Inserts a key-value pair into a JSON object.
 
-use serde_json;
+use crate::liberdus;
 use reqwest;
 use serde;
-use crate::liberdus;
+use serde_json;
 
 /// Represents the API response for transaction queries.
 #[derive(serde::Deserialize)]
@@ -49,16 +49,14 @@ struct Transaction {
 }
 
 /// Represents the original data of a transaction.
-#[derive(serde::Deserialize)]
-#[derive(Clone)]
+#[derive(serde::Deserialize, Clone)]
 struct OriginalTxData {
     /// The transaction data as a JSON value.
     tx: serde_json::Value,
 }
 
 /// Represents the original data of a transaction.
-#[derive(serde::Deserialize)]
-#[derive(Clone)]
+#[derive(serde::Deserialize, Clone)]
 struct CollectorAccountResp {
     /// The transaction data as a JSON value.
     accounts: Vec<serde_json::Value>,
@@ -74,33 +72,44 @@ struct CollectorAccountResp {
 /// # Returns
 /// - `Some(serde_json::Value)` if the transaction is found.
 /// - `None` if the transaction is not found or an error occurs.
-pub async fn get_transaction(collector_ip: &String, collector_port: &u16, id: &String) -> Option<serde_json::Value> {
-    let built_url = format!("http://{}:{}/api/transaction?txId={}", collector_ip, collector_port, id);
+pub async fn get_transaction(
+    collector_ip: &String,
+    collector_port: &u16,
+    id: &String,
+) -> Option<serde_json::Value> {
+    let built_url = format!(
+        "http://{}:{}/api/transaction?txId={}",
+        collector_ip, collector_port, id
+    );
     let resp = match reqwest::get(built_url).await {
         Ok(resp) => resp,
-        Err(_) => { return None; },
+        Err(_) => {
+            return None;
+        }
     };
 
     let result: Option<TxResp> = match resp.status() {
         reqwest::StatusCode::OK => {
             let json = match resp.json().await {
                 Ok(json) => json,
-                Err(_) => { return None; },
+                Err(_) => {
+                    return None;
+                }
             };
 
             json
-        },
+        }
         _ => None,
     };
 
-   return match result {
+    return match result {
         Some(result) => {
             if result.success? && result.transactions.len() > 0 {
                 Some(result.transactions[0].originalTxData.tx.clone())
             } else {
                 None
             }
-        },
+        }
         None => None,
     };
 }
@@ -115,49 +124,63 @@ pub async fn get_transaction(collector_ip: &String, collector_port: &u16, id: &S
 /// # Returns
 /// - `Ok(serde_json::Value)` containing the transaction history.
 /// - `Err(String)` if an error occurs or the operation fails.
-pub async fn get_transaction_history(collector_ip: &String, collector_port: &u16, account_id: &String) -> Result<serde_json::Value, String> {
-    let built_url = format!("http://{}:{}/api/transaction?accountId={}", collector_ip, collector_port, account_id);
+pub async fn get_transaction_history(
+    collector_ip: &String,
+    collector_port: &u16,
+    account_id: &String,
+) -> Result<serde_json::Value, String> {
+    let built_url = format!(
+        "http://{}:{}/api/transaction?accountId={}",
+        collector_ip, collector_port, account_id
+    );
     let resp = match reqwest::get(built_url).await {
         Ok(resp) => resp,
         Err(e) => return Err(e.to_string()),
     };
 
     let result: TxResp = match resp.status() {
-        reqwest::StatusCode::OK => {
-            match resp.json().await {
-                Ok(json) => json,
-                Err(e) => return Err(e.to_string()),
-            }
+        reqwest::StatusCode::OK => match resp.json().await {
+            Ok(json) => json,
+            Err(e) => return Err(e.to_string()),
         },
         status => return Err(format!("HTTP error: {}", status)),
     };
 
     if result.success.unwrap_or(false) {
-        let transactions = result.transactions.iter().map(|tx| {
-            let original_tx_data = tx.originalTxData.tx.clone();
-            let tx_id = tx.txId.clone();
+        let transactions = result
+            .transactions
+            .iter()
+            .map(|tx| {
+                let original_tx_data = tx.originalTxData.tx.clone();
+                let tx_id = tx.txId.clone();
 
-            insert_field(original_tx_data, "txId", serde_json::json!(tx_id))
-        }).collect::<Vec<serde_json::Value>>();
+                insert_field(original_tx_data, "txId", serde_json::json!(tx_id))
+            })
+            .collect::<Vec<serde_json::Value>>();
         Ok(serde_json::json!({ "transactions": transactions }))
     } else {
         Err(result.error.unwrap_or_else(|| "Unknown error".to_string()))
     }
 }
 
-pub async fn get_account_by_address(collector_ip: &str, collector_port: &str, account_id: &str) -> Result<serde_json::Value, String> {
-    let built_url = format!("http://{}:{}/api/account?accountId={}", collector_ip, collector_port, account_id);
+pub async fn get_account_by_address(
+    collector_ip: &str,
+    collector_port: &str,
+    account_id: &str,
+) -> Result<serde_json::Value, String> {
+    let built_url = format!(
+        "http://{}:{}/api/account?accountId={}",
+        collector_ip, collector_port, account_id
+    );
     let resp = match reqwest::get(built_url).await {
         Ok(resp) => resp,
         Err(e) => return Err(e.to_string()),
     };
 
     let result: CollectorAccountResp = match resp.status() {
-        reqwest::StatusCode::OK => {
-            match resp.json().await {
-                Ok(json) => json,
-                Err(e) => return Err(e.to_string()),
-            }
+        reqwest::StatusCode::OK => match resp.json().await {
+            Ok(json) => json,
+            Err(e) => return Err(e.to_string()),
         },
         status => return Err(format!("HTTP error: {}", status)),
     };
@@ -170,7 +193,6 @@ pub async fn get_account_by_address(collector_ip: &str, collector_port: &str, ac
         Err("Account not found".to_string())
     }
 }
-
 
 /// Placeholder function for fetching messages.
 ///
@@ -189,11 +211,13 @@ pub async fn get_message() {
 ///
 /// # Returns
 /// A modified JSON object with the new key-value pair.
-fn insert_field(mut obj: serde_json::Value, key: &str, value: serde_json::Value) -> serde_json::Value {
+fn insert_field(
+    mut obj: serde_json::Value,
+    key: &str,
+    value: serde_json::Value,
+) -> serde_json::Value {
     if let Some(map) = obj.as_object_mut() {
         map.insert(key.to_string(), value);
     }
     obj
 }
-
-
