@@ -334,7 +334,7 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{config, http, liberdus::Liberdus};
+</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{config, http};
 <span class="kw">use </span>std::{
     collections::HashMap,
     sync::Arc,
@@ -498,7 +498,7 @@
     </span>S: AsyncRead + AsyncWrite + Unpin + Send,
 {
     <span class="kw">let </span>upstream_ip = config.shardus_monitor.upstream_ip.clone();
-    <span class="kw">let </span>upstream_port = config.shardus_monitor.upstream_port.clone();
+    <span class="kw">let </span>upstream_port = config.shardus_monitor.upstream_port;
     <span class="kw">let </span>ip_port = <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, upstream_ip, upstream_port);
     <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(
         Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64),
@@ -597,8 +597,8 @@
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PayloadCache {
         PayloadCache {
             buffer: <span class="self">self</span>.buffer.clone(),
-            timestamp: <span class="self">self</span>.timestamp.clone(),
-            lifespan: <span class="self">self</span>.lifespan.clone(),
+            timestamp: <span class="self">self</span>.timestamp,
+            lifespan: <span class="self">self</span>.lifespan,
         }
     }
 }

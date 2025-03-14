@@ -748,17 +748,11 @@
 <a href="#748" id="748">748</a>
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
-<a href="#751" id="751">751</a>
-<a href="#752" id="752">752</a>
-<a href="#753" id="753">753</a>
-<a href="#754" id="754">754</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
 </span><span class="kw">use </span><span class="kw">crate</span>::crypto;
-<span class="kw">use crate</span>::{archivers, config, http, collector};
+<span class="kw">use crate</span>::{archivers, collector, config, http};
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>reqwest;
 <span class="kw">use </span>serde::{<span class="self">self</span>, Deserialize, Serialize};
-<span class="kw">use </span>serde_json;
 <span class="kw">use </span>std::{
     cmp::Ordering,
     collections::HashMap,
@@ -954,7 +948,7 @@
             <span class="kw">return </span><span class="number">1.0</span>; <span class="comment">// All timeouts are the same
         </span>}
         <span class="kw">let </span>timetaken_ms_f = timetaken_ms <span class="kw">as </span>f64;
-        <span class="kw">let </span>min_timeout_f = <span class="number">0.0 </span><span class="kw">as </span>f64;
+        <span class="kw">let </span>min_timeout_f = <span class="number">0.0_f64</span>;
         <span class="kw">let </span>max_timeout_f = max_timeout <span class="kw">as </span>f64;
         <span class="number">1.0 </span>- (timetaken_ms_f - min_timeout_f) / (max_timeout_f - min_timeout_f)
     }
@@ -1015,8 +1009,7 @@
         <span class="kw">if </span><span class="self">self
             </span>.list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == <span class="bool-val">true
-        </span>{
+        {
             <span class="kw">return</span>;
         }
 
@@ -1068,11 +1061,10 @@
     /// this function required the list to be sorted and bias values are calculated prior
     /// return None otherwise.
     </span><span class="kw">async fn </span>get_random_consensor_biased(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Consensor)&gt; {
-        <span class="kw">if </span><span class="self">self
+        <span class="kw">if </span>!<span class="self">self
             </span>.list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == <span class="bool-val">false
-        </span>{
+        {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
 
@@ -1130,12 +1122,11 @@
                 .len()
                 == <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.len())
         {
-            <span class="bool-val">true </span>=&gt; <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>,
+            <span class="bool-val">true </span>=&gt; <span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>,
             <span class="bool-val">false </span>=&gt; {
                 <span class="kw">let </span>index = <span class="self">self
                     </span>.round_robin_index
-                    .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed)
-                    .clone();
+                    .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
 
                 <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>;
                 <span class="kw">if </span>index &gt;= nodes.len() {
@@ -1147,7 +1138,7 @@
                     <span class="self">self</span>.prepare_list().<span class="kw">await</span>;
                     <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>;
                 }
-                <span class="kw">return </span><span class="prelude-val">Some</span>((index, nodes[index].clone()));
+                <span class="prelude-val">Some</span>((index, nodes[index].clone()))
             }
         }
     }
@@ -1157,8 +1148,7 @@
         </span><span class="kw">if </span><span class="self">self
             </span>.list_prepared
             .load(std::sync::atomic::Ordering::Relaxed)
-            == <span class="bool-val">true
-        </span>{
+        {
             <span class="kw">return</span>;
         }
 
@@ -1200,18 +1190,20 @@
         address: <span class="kw-2">&amp;</span>str,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, std::io::Error&gt; {
         <span class="kw">let </span>collecotr_ip = <span class="self">self</span>.config.local_source.collector_api_ip.clone();
-        <span class="kw">let </span>collector_port = <span class="self">self</span>.config.local_source.collector_api_port.clone().to_string();
+        <span class="kw">let </span>collector_port = <span class="self">self
+            </span>.config
+            .local_source
+            .collector_api_port
+            .clone()
+            .to_string();
 
-        <span class="kw">let </span>account = collector::get_account_by_address(
-            <span class="kw-2">&amp;</span>collecotr_ip,
-            <span class="kw-2">&amp;</span>collector_port,
-            address,
-        ).<span class="kw">await</span>.unwrap_or(serde_json::Value::Bool(<span class="bool-val">false</span>));
+        <span class="kw">let </span>account = collector::get_account_by_address(<span class="kw-2">&amp;</span>collecotr_ip, <span class="kw-2">&amp;</span>collector_port, address)
+            .<span class="kw">await
+            </span>.unwrap_or(serde_json::Value::Bool(<span class="bool-val">false</span>));
 
         <span class="kw">if </span>account != serde_json::Value::Bool(<span class="bool-val">false</span>) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(account);
         }
-
 
         <span class="kw">let </span>node = <span class="kw">match </span><span class="self">self</span>.get_next_appropriate_consensor().<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(n) =&gt; n.<span class="number">1</span>,
@@ -1225,7 +1217,8 @@
         <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/account/{}"</span>, node.ip, node.port, address);
         <span class="kw">let </span>account = <span class="kw">match </span>reqwest::get(<span class="kw-2">&amp;</span>url).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(r) =&gt; {
-                <span class="kw">let </span>parsed = <span class="kw">match </span>r.json::&lt;GetAccountResp&gt;().<span class="kw">await </span>{
+                
+                <span class="kw">match </span>r.json::&lt;GetAccountResp&gt;().<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(p) =&gt; p.account,
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="macro">eprintln!</span>(<span class="string">"Failed to parse account: {}"</span>, e);
@@ -1234,8 +1227,7 @@
                             <span class="string">"Failed to parse account"</span>,
                         ));
                     }
-                };
-                parsed
+                }
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Failed to get account: {}"</span>, e);
@@ -1246,7 +1238,7 @@
             }
         };
 
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(account);
+        <span class="prelude-val">Ok</span>(account)
     }
 }
 

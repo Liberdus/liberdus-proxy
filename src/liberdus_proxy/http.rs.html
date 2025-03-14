@@ -438,7 +438,6 @@
         .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-
                 <span class="kw">let </span>(method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
 
                 <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(<span class="kw-2">&amp;</span>route) {
@@ -452,17 +451,15 @@
                     </span>{
                         <span class="macro">eprintln!</span>(<span class="string">"Error handling monitor request: {}"</span>, e);
                     }
-                } <span class="kw">else </span>{
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
-                        req_buf,
-                        <span class="kw-2">&amp;mut </span>client_stream,
-                        liberdus.clone(),
-                        config.clone(),
-                    )
-                    .<span class="kw">await
-                    </span>{
-                        <span class="macro">eprintln!</span>(<span class="string">"Error handling liberdus request: {}"</span>, e);
-                    }
+                } <span class="kw">else if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
+                    req_buf,
+                    <span class="kw-2">&amp;mut </span>client_stream,
+                    liberdus.clone(),
+                    config.clone(),
+                )
+                .<span class="kw">await
+                </span>{
+                    <span class="macro">eprintln!</span>(<span class="string">"Error handling liberdus request: {}"</span>, e);
                 }
             }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
@@ -564,7 +561,10 @@
                 <span class="kw">let </span>http_method = parts[<span class="number">0</span>]; <span class="comment">// GET, POST, DELETE, etc.
                 </span><span class="kw">let </span>path = parts[<span class="number">1</span>]; <span class="comment">// The requested path
 
-                </span><span class="kw">if </span><span class="macro">matches!</span>(http_method, <span class="string">"GET" </span>| <span class="string">"POST" </span>| <span class="string">"PUT" </span>| <span class="string">"DELETE" </span>| <span class="string">"PATCH" </span>| <span class="string">"OPTIONS" </span>| <span class="string">"HEAD"</span>) {
+                </span><span class="kw">if </span><span class="macro">matches!</span>(
+                    http_method,
+                    <span class="string">"GET" </span>| <span class="string">"POST" </span>| <span class="string">"PUT" </span>| <span class="string">"DELETE" </span>| <span class="string">"PATCH" </span>| <span class="string">"OPTIONS" </span>| <span class="string">"HEAD"
+                </span>) {
                     method = <span class="prelude-val">Some</span>(http_method.to_string());
                     route = <span class="prelude-val">Some</span>(path.to_string());
                     <span class="kw">break</span>;

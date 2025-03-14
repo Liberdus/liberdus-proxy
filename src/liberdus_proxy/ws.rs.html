@@ -305,7 +305,6 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::subscription;
 <span class="kw">use crate</span>::{config, liberdus, subscription::WebsocketIncoming, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
@@ -313,7 +312,6 @@
 <span class="kw">use </span>tokio::sync::mpsc::UnboundedSender;
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
-<span class="kw">use </span>tokio_tungstenite;
 <span class="kw">use </span>tokio_tungstenite::tungstenite::protocol::Message;
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -376,7 +374,7 @@
     <span class="comment">// let semaphore = Arc::new(Semaphore::new(300));
 
     </span><span class="kw">let </span>listener =
-        <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port.clone() + <span class="number">1</span>))
+        <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port + <span class="number">1</span>))
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(l) =&gt; l,

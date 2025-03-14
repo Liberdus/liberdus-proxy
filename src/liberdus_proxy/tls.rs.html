@@ -44,7 +44,7 @@
 <a href="#44" id="44">44</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
 <span class="kw">use </span>std::fs::File;
-<span class="kw">use </span>std::io::{BufReader, Read};
+<span class="kw">use </span>std::io::BufReader;
 <span class="kw">use </span>tokio_rustls::rustls::{pki_types::CertificateDer, pki_types::PrivateKeyDer, ServerConfig};
 
 <span class="comment">// Configure TLS using paths from config
@@ -57,7 +57,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>cert_reader = BufReader::new(cert_file);
     <span class="kw">let </span>certs = certs(<span class="kw-2">&amp;mut </span>cert_reader)<span class="question-mark">?
         </span>.into_iter()
-        .map(|c| CertificateDer::from(c))
+        .map(CertificateDer::from)
         .collect::&lt;Vec&lt;CertificateDer&gt;&gt;();
 
     <span class="kw">if </span>certs.is_empty() {

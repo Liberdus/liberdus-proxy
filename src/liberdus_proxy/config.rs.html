@@ -81,10 +81,8 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
-</span><span class="kw">use </span>serde;
-<span class="kw">use </span>std::fs;
+</span><span class="kw">use </span>std::fs;
 
 <span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
 </span><span class="kw">pub struct </span>Config {
@@ -157,7 +155,7 @@
 /// path is src/config.json
 </span><span class="kw">impl </span>Config {
     <span class="kw">pub fn </span>load() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, String&gt; {
-        <span class="kw">let </span>config_file = <span class="macro">format!</span>(<span class="string">"src/config.json"</span>);
+        <span class="kw">let </span>config_file = <span class="string">"src/config.json"</span>.to_string();
 
         <span class="kw">let </span>config_data = fs::read_to_string(<span class="kw-2">&amp;</span>config_file)
             .map_err(|err| <span class="macro">format!</span>(<span class="string">"Failed to read config file: {}"</span>, err))<span class="question-mark">?</span>;

@@ -277,12 +277,6 @@
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -367,25 +361,19 @@
     <span class="kw">async fn </span>remove_states(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: UserAccountAddress, socket_id: <span class="kw-2">&amp;</span>ws::SocketId) {
         <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.states.write().<span class="kw">await</span>;
 
-        <span class="kw">match </span>guard.accounts_by_sock.get_mut(socket_id) {
-            <span class="prelude-val">Some</span>(a) =&gt; {
-                a.remove(<span class="kw-2">&amp;</span>addr);
-                <span class="kw">if </span>a.is_empty() {
-                    guard.accounts_by_sock.remove(socket_id);
-                }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(a) = guard.accounts_by_sock.get_mut(socket_id) {
+            a.remove(<span class="kw-2">&amp;</span>addr);
+            <span class="kw">if </span>a.is_empty() {
+                guard.accounts_by_sock.remove(socket_id);
             }
-            <span class="kw">_ </span>=&gt; {}
         }
 
-        <span class="kw">match </span>guard.socks_by_account.get_mut(<span class="kw-2">&amp;</span>addr) {
-            <span class="prelude-val">Some</span>(s) =&gt; {
-                s.remove(socket_id);
-                <span class="kw">if </span>s.is_empty() {
-                    guard.socks_by_account.remove(<span class="kw-2">&amp;</span>addr);
-                    guard.last_received.remove(<span class="kw-2">&amp;</span>addr);
-                }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = guard.socks_by_account.get_mut(<span class="kw-2">&amp;</span>addr) {
+            s.remove(socket_id);
+            <span class="kw">if </span>s.is_empty() {
+                guard.socks_by_account.remove(<span class="kw-2">&amp;</span>addr);
+                guard.last_received.remove(<span class="kw-2">&amp;</span>addr);
             }
-            <span class="kw">_ </span>=&gt; {}
         }
     }
 
@@ -467,7 +455,7 @@
                 <span class="kw">let </span>guard = states.read().<span class="kw">await</span>;
 
                 <span class="kw">let </span>old_timestamp = <span class="kw">match </span>guard.last_received.get(<span class="kw-2">&amp;</span>address) {
-                    <span class="prelude-val">Some</span>(t) =&gt; t.clone(),
+                    <span class="prelude-val">Some</span>(t) =&gt; <span class="kw-2">*</span>t,
                     <span class="prelude-val">None </span>=&gt; {
                         <span class="comment">// todo purge this address from all entries
                         </span>drop(guard);
@@ -539,14 +527,14 @@
     }
 
     <span class="kw">pub async fn </span>subscribe(<span class="kw-2">&amp;</span><span class="self">self</span>, socket_id: <span class="kw-2">&amp;</span>ws::SocketId, address: <span class="kw-2">&amp;</span>str) -&gt; bool {
-        <span class="kw">match </span><span class="self">self</span>.is_exist(<span class="kw-2">&amp;</span>address.to_string(), <span class="kw-2">&amp;</span>socket_id).<span class="kw">await </span>{
+        <span class="kw">match </span><span class="self">self</span>.is_exist(<span class="kw-2">&amp;</span>address.to_string(), socket_id).<span class="kw">await </span>{
             <span class="bool-val">true </span>=&gt; {
-                <span class="kw">return </span><span class="bool-val">false</span>;
-            }
+                <span class="bool-val">false
+            </span>}
             <span class="bool-val">false </span>=&gt; {
                 <span class="self">self</span>.set_states(address.to_string(), socket_id).<span class="kw">await</span>;
-                <span class="kw">return </span><span class="bool-val">true</span>;
-            }
+                <span class="bool-val">true
+            </span>}
         }
     }
 

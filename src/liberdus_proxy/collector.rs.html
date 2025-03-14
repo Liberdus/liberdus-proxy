@@ -197,30 +197,46 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module provides utilities to interact with a transaction collector API.
-//! 
+//!
 //! The module includes:
 //! - Fetching a specific transaction by its ID.
 //! - Fetching transaction history for a specific account.
 //! - (Planned) Fetching messages.
-//! 
+//!
 //! # Structures
 //! - [`TxResp`]: Represents the API response for transaction queries.
 //! - [`Transaction`]: Represents a single transaction.
 //! - [`OriginalTxData`]: Represents the original data of a transaction.
-//! 
+//!
 //! # Functions
 //! - [`get_transaction`]: Fetches a specific transaction by its ID.
 //! - [`get_transaction_history`]: Fetches the transaction history for a given account.
 //! - [`get_message`]: Placeholder for message-related functionality.
 //! - [`insert_field`]: Inserts a key-value pair into a JSON object.
 
-</span><span class="kw">use </span>serde_json;
-<span class="kw">use </span>reqwest;
-<span class="kw">use </span>serde;
-<span class="kw">use </span><span class="kw">crate</span>::liberdus;
 
-<span class="doccomment">/// Represents the API response for transaction queries.
+/// Represents the API response for transaction queries.
 </span><span class="attr">#[derive(serde::Deserialize)]
 </span><span class="kw">struct </span>TxResp {
     <span class="doccomment">/// Indicates if the operation was successful.
@@ -248,16 +264,14 @@
 }
 
 <span class="doccomment">/// Represents the original data of a transaction.
-</span><span class="attr">#[derive(serde::Deserialize)]
-#[derive(Clone)]
+</span><span class="attr">#[derive(serde::Deserialize, Clone)]
 </span><span class="kw">struct </span>OriginalTxData {
     <span class="doccomment">/// The transaction data as a JSON value.
     </span>tx: serde_json::Value,
 }
 
 <span class="doccomment">/// Represents the original data of a transaction.
-</span><span class="attr">#[derive(serde::Deserialize)]
-#[derive(Clone)]
+</span><span class="attr">#[derive(serde::Deserialize, Clone)]
 </span><span class="kw">struct </span>CollectorAccountResp {
     <span class="doccomment">/// The transaction data as a JSON value.
     </span>accounts: Vec&lt;serde_json::Value&gt;,
@@ -273,35 +287,46 @@
 /// # Returns
 /// - `Some(serde_json::Value)` if the transaction is found.
 /// - `None` if the transaction is not found or an error occurs.
-</span><span class="kw">pub async fn </span>get_transaction(collector_ip: <span class="kw-2">&amp;</span>String, collector_port: <span class="kw-2">&amp;</span>u16, id: <span class="kw-2">&amp;</span>String) -&gt; <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt; {
-    <span class="kw">let </span>built_url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/api/transaction?txId={}"</span>, collector_ip, collector_port, id);
+</span><span class="kw">pub async fn </span>get_transaction(
+    collector_ip: <span class="kw-2">&amp;</span>String,
+    collector_port: <span class="kw-2">&amp;</span>u16,
+    id: <span class="kw-2">&amp;</span>String,
+) -&gt; <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt; {
+    <span class="kw">let </span>built_url = <span class="macro">format!</span>(
+        <span class="string">"http://{}:{}/api/transaction?txId={}"</span>,
+        collector_ip, collector_port, id
+    );
     <span class="kw">let </span>resp = <span class="kw">match </span>reqwest::get(built_url).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(resp) =&gt; resp,
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; { <span class="kw">return </span><span class="prelude-val">None</span>; },
+        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
     };
 
     <span class="kw">let </span>result: <span class="prelude-ty">Option</span>&lt;TxResp&gt; = <span class="kw">match </span>resp.status() {
         reqwest::StatusCode::OK =&gt; {
-            <span class="kw">let </span>json = <span class="kw">match </span>resp.json().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(json) =&gt; json,
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; { <span class="kw">return </span><span class="prelude-val">None</span>; },
-            };
+            
 
-            json
-        },
+            <span class="kw">match </span>resp.json().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(json) =&gt; json,
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
+                }
+            }
+        }
         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
     };
 
-   <span class="kw">return match </span>result {
+    <span class="kw">match </span>result {
         <span class="prelude-val">Some</span>(result) =&gt; {
-            <span class="kw">if </span>result.success<span class="question-mark">? </span>&amp;&amp; result.transactions.len() &gt; <span class="number">0 </span>{
+            <span class="kw">if </span>result.success<span class="question-mark">? </span>&amp;&amp; !result.transactions.is_empty() {
                 <span class="prelude-val">Some</span>(result.transactions[<span class="number">0</span>].originalTxData.tx.clone())
             } <span class="kw">else </span>{
                 <span class="prelude-val">None
             </span>}
-        },
+        }
         <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-    };
+    }
 }
 
 <span class="doccomment">/// Fetches the transaction history for a specific account.
@@ -314,54 +339,68 @@
 /// # Returns
 /// - `Ok(serde_json::Value)` containing the transaction history.
 /// - `Err(String)` if an error occurs or the operation fails.
-</span><span class="kw">pub async fn </span>get_transaction_history(collector_ip: <span class="kw-2">&amp;</span>String, collector_port: <span class="kw-2">&amp;</span>u16, account_id: <span class="kw-2">&amp;</span>String) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, String&gt; {
-    <span class="kw">let </span>built_url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/api/transaction?accountId={}"</span>, collector_ip, collector_port, account_id);
+</span><span class="kw">pub async fn </span>get_transaction_history(
+    collector_ip: <span class="kw-2">&amp;</span>String,
+    collector_port: <span class="kw-2">&amp;</span>u16,
+    account_id: <span class="kw-2">&amp;</span>String,
+) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, String&gt; {
+    <span class="kw">let </span>built_url = <span class="macro">format!</span>(
+        <span class="string">"http://{}:{}/api/transaction?accountId={}"</span>,
+        collector_ip, collector_port, account_id
+    );
     <span class="kw">let </span>resp = <span class="kw">match </span>reqwest::get(built_url).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(resp) =&gt; resp,
         <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
     };
 
     <span class="kw">let </span>result: TxResp = <span class="kw">match </span>resp.status() {
-        reqwest::StatusCode::OK =&gt; {
-            <span class="kw">match </span>resp.json().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(json) =&gt; json,
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
-            }
+        reqwest::StatusCode::OK =&gt; <span class="kw">match </span>resp.json().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(json) =&gt; json,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
         },
         status =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"HTTP error: {}"</span>, status)),
     };
 
     <span class="kw">if </span>result.success.unwrap_or(<span class="bool-val">false</span>) {
-        <span class="kw">let </span>transactions = result.transactions.iter().map(|tx| {
-            <span class="kw">let </span>original_tx_data = tx.originalTxData.tx.clone();
-            <span class="kw">let </span>tx_id = tx.txId.clone();
+        <span class="kw">let </span>transactions = result
+            .transactions
+            .iter()
+            .map(|tx| {
+                <span class="kw">let </span>original_tx_data = tx.originalTxData.tx.clone();
+                <span class="kw">let </span>tx_id = tx.txId.clone();
 
-            insert_field(original_tx_data, <span class="string">"txId"</span>, <span class="macro">serde_json::json!</span>(tx_id))
-        }).collect::&lt;Vec&lt;serde_json::Value&gt;&gt;();
+                insert_field(original_tx_data, <span class="string">"txId"</span>, <span class="macro">serde_json::json!</span>(tx_id))
+            })
+            .collect::&lt;Vec&lt;serde_json::Value&gt;&gt;();
         <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({ <span class="string">"transactions"</span>: transactions }))
     } <span class="kw">else </span>{
         <span class="prelude-val">Err</span>(result.error.unwrap_or_else(|| <span class="string">"Unknown error"</span>.to_string()))
     }
 }
 
-<span class="kw">pub async fn </span>get_account_by_address(collector_ip: <span class="kw-2">&amp;</span>str, collector_port: <span class="kw-2">&amp;</span>str, account_id: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, String&gt; {
-    <span class="kw">let </span>built_url = <span class="macro">format!</span>(<span class="string">"http://{}:{}/api/account?accountId={}"</span>, collector_ip, collector_port, account_id);
+<span class="kw">pub async fn </span>get_account_by_address(
+    collector_ip: <span class="kw-2">&amp;</span>str,
+    collector_port: <span class="kw-2">&amp;</span>str,
+    account_id: <span class="kw-2">&amp;</span>str,
+) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, String&gt; {
+    <span class="kw">let </span>built_url = <span class="macro">format!</span>(
+        <span class="string">"http://{}:{}/api/account?accountId={}"</span>,
+        collector_ip, collector_port, account_id
+    );
     <span class="kw">let </span>resp = <span class="kw">match </span>reqwest::get(built_url).<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(resp) =&gt; resp,
         <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
     };
 
     <span class="kw">let </span>result: CollectorAccountResp = <span class="kw">match </span>resp.status() {
-        reqwest::StatusCode::OK =&gt; {
-            <span class="kw">match </span>resp.json().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(json) =&gt; json,
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
-            }
+        reqwest::StatusCode::OK =&gt; <span class="kw">match </span>resp.json().<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>(json) =&gt; json,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e.to_string()),
         },
         status =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"HTTP error: {}"</span>, status)),
     };
 
-    <span class="kw">if </span>result.accounts.len() &gt; <span class="number">0 </span>{
+    <span class="kw">if </span>!result.accounts.is_empty() {
         <span class="comment">// grab `data` from the first account
         </span><span class="kw">let </span>account = result.accounts[<span class="number">0</span>].get(<span class="string">"data"</span>).unwrap();
         <span class="prelude-val">Ok</span>(account.clone())
@@ -369,7 +408,6 @@
         <span class="prelude-val">Err</span>(<span class="string">"Account not found"</span>.to_string())
     }
 }
-
 
 <span class="doccomment">/// Placeholder function for fetching messages.
 ///
@@ -388,12 +426,14 @@
 ///
 /// # Returns
 /// A modified JSON object with the new key-value pair.
-</span><span class="kw">fn </span>insert_field(<span class="kw-2">mut </span>obj: serde_json::Value, key: <span class="kw-2">&amp;</span>str, value: serde_json::Value) -&gt; serde_json::Value {
+</span><span class="kw">fn </span>insert_field(
+    <span class="kw-2">mut </span>obj: serde_json::Value,
+    key: <span class="kw-2">&amp;</span>str,
+    value: serde_json::Value,
+) -&gt; serde_json::Value {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(map) = obj.as_object_mut() {
         map.insert(key.to_string(), value);
     }
     obj
 }
-
-
 </code></pre></div></section></main></body></html>
