@@ -325,6 +325,13 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -343,11 +350,8 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 </span><span class="kw">use crate</span>::{config, liberdus, shardus_monitor, Stats};
-<span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-<span class="kw">use </span>tokio::net::TcpStream;
-<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio::time::{timeout, Duration};
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
 
@@ -434,7 +438,8 @@
         .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-                <span class="kw">let </span>route = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap_or(<span class="string">"/"</span>.to_string());
+
+                <span class="kw">let </span>(method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
 
                 <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(<span class="kw-2">&amp;</span>route) {
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
@@ -548,22 +553,31 @@
 </span>}
 
 <span class="comment">// without host
-</span><span class="kw">pub fn </span>get_route(buffer: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+</span><span class="kw">pub fn </span>get_route(buffer: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;(String, String)&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>route = <span class="prelude-val">None</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>method = <span class="prelude-val">None</span>;
+
     <span class="kw">if let </span><span class="prelude-val">Ok</span>(buffer_str) = std::str::from_utf8(buffer) {
         <span class="kw">for </span>line <span class="kw">in </span>buffer_str.lines() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = line.strip_prefix(<span class="string">"GET "</span>) {
-                <span class="kw">let </span><span class="kw-2">mut </span>parts = value.split_whitespace();
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = parts.next() {
+            <span class="kw">let </span>parts: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = line.split_whitespace().collect();
+            <span class="kw">if </span>parts.len() &gt;= <span class="number">2 </span>{
+                <span class="kw">let </span>http_method = parts[<span class="number">0</span>]; <span class="comment">// GET, POST, DELETE, etc.
+                </span><span class="kw">let </span>path = parts[<span class="number">1</span>]; <span class="comment">// The requested path
+
+                </span><span class="kw">if </span><span class="macro">matches!</span>(http_method, <span class="string">"GET" </span>| <span class="string">"POST" </span>| <span class="string">"PUT" </span>| <span class="string">"DELETE" </span>| <span class="string">"PATCH" </span>| <span class="string">"OPTIONS" </span>| <span class="string">"HEAD"</span>) {
+                    method = <span class="prelude-val">Some</span>(http_method.to_string());
                     route = <span class="prelude-val">Some</span>(path.to_string());
                     <span class="kw">break</span>;
                 }
             }
         }
     }
-    route
-}
 
+    <span class="kw">match </span>(method, route) {
+        (<span class="prelude-val">Some</span>(m), <span class="prelude-val">Some</span>(r)) =&gt; <span class="prelude-val">Some</span>((m, r)),
+        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+    }
+}
 <span class="kw">pub async fn </span>listen(
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
     config: Arc&lt;config::Config&gt;,
