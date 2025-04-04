@@ -1,9 +1,5 @@
 # Liberdus proxy server
-This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aim to minimize clients having to track the nodes themselves.
-
-For additional features like real time chat room subscription, data distribution protocol integration and muc more consistent API, please use liberdus-rpc.
-
-The underlying algorithem that pick a node based on biased random selection is identical to the one used in liberdus-rpc.
+This is a simple proxy server that forwards requests to the Liberdus consensus node (validators). The service does nothing special except picking the appropriate node to forward the request to. Aims to minimize clients having to track the nodes themselves.
 
 # Have Cargo setup on your system
 ```bash
