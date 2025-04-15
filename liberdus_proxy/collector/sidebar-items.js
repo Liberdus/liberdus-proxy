@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_account_by_address","get_message","get_transaction","get_transaction_history","insert_field"],"struct":["CollectorAccountResp","OriginalTxData","Transaction","TxResp"]};
+window.SIDEBAR_ITEMS = {"fn":["get_account_by_address","get_message","get_transaction","get_transaction_history","insert_field","listen_account_update"],"struct":["CollectorAccountResp","OriginalTxData","Transaction","TxResp"]};

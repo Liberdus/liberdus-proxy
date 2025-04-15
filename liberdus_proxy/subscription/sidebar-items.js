@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["SubscriptionActions"],"struct":["Inner","Manager","SubscriptionEvent","SubscriptionResponse","WebsocketIncoming"],"type":["Timestamp","UserAccountAddress"]};
+window.SIDEBAR_ITEMS = {"enum":["SubscriptionActions"],"fn":["deserialize_stringified_account_update","listen_account_update_callback"],"struct":["AccountUpdate","AccountUpdatePayload","Inner","Manager","SubscriptionEvent","SubscriptionResponse","WebsocketIncoming"],"type":["Timestamp","UserAccountAddress"]};

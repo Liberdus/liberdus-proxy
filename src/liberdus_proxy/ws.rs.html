@@ -301,11 +301,7 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::subscription;
+</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{collector, subscription};
 <span class="kw">use crate</span>::{config, liberdus, subscription::WebsocketIncoming, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
 <span class="kw">use </span>std::{collections::HashMap, sync::Arc};
@@ -374,9 +370,7 @@
     <span class="comment">// let semaphore = Arc::new(Semaphore::new(300));
 
     </span><span class="kw">let </span>listener =
-        <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port + <span class="number">1</span>))
-            .<span class="kw">await
-        </span>{
+        <span class="kw">match </span>tokio::net::TcpListener::bind(<span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, config.http_port + <span class="number">1</span>)).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(l) =&gt; l,
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error binding to port: {}"</span>, e);
@@ -389,15 +383,13 @@
         liberdus.clone(),
     ));
 
-    <span class="kw">let </span>sm = Arc::clone(<span class="kw-2">&amp;</span>subscription_manager);
+    <span class="kw">let </span>subscription_manager_for_listener = Arc::clone(<span class="kw-2">&amp;</span>subscription_manager);
     tokio::spawn(<span class="kw">async move </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>ticker = tokio::time::interval(tokio::time::Duration::from_secs(<span class="number">10</span>));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
-
-        <span class="kw">loop </span>{
-            ticker.tick().<span class="kw">await</span>;
-            sm.discover().<span class="kw">await</span>;
-        }
+        collector::listen_account_update(
+            subscription_manager_for_listener.clone(),
+            subscription::listen_account_update_callback,
+        )
+        .<span class="kw">await</span>;
     });
     <span class="macro">println!</span>(
         <span class="string">"Websocket Listening on: {}"</span>,

@@ -81,6 +81,8 @@
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
 </span><span class="kw">use </span>std::fs;
 
@@ -149,6 +151,8 @@
 </span><span class="kw">pub struct </span>LocalSource {
     <span class="kw">pub </span>collector_api_ip: String,
     <span class="kw">pub </span>collector_api_port: u16,
+    <span class="kw">pub </span>collector_event_server_ip: String,
+    <span class="kw">pub </span>collector_event_server_port: u16,
 }
 
 <span class="doccomment">/// Load the configuration from the config json file
