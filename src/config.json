@@ -13,16 +13,18 @@
     },
     "standalone_network": {
         "enabled":  true,
-        "replacement_ip": "63.141.233.178"
+        "replacement_ip": "69.197.162.234"
     },
     "shardus_monitor": {
         "enabled": true,
-        "upstream_ip": "test.liberdus.com",
+        "upstream_ip": "69.197.162.234",
         "upstream_port": 3000,
         "https": false
     },
     "local_source": {
         "collector_api_ip":"0.0.0.0",
         "collector_api_port":6101
+        "collector_event_server_ip":"0.0.0.0",
+        "collector_event_server_port":4444
     }
 }

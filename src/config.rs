@@ -66,6 +66,8 @@ pub struct ShardusMonitorProxyConfig {
 pub struct LocalSource {
     pub collector_api_ip: String,
     pub collector_api_port: u16,
+    pub collector_event_server_ip: String,
+    pub collector_event_server_port: u16,
 }
 
 /// Load the configuration from the config json file

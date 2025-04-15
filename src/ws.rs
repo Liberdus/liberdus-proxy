@@ -1,4 +1,4 @@
-use crate::subscription;
+use crate::{collector, subscription};
 use crate::{config, liberdus, subscription::WebsocketIncoming, Stats};
 use futures_util::{SinkExt, StreamExt};
 use std::{collections::HashMap, sync::Arc};
@@ -67,9 +67,7 @@ pub async fn listen(
     // let semaphore = Arc::new(Semaphore::new(300));
 
     let listener =
-        match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port + 1))
-            .await
-        {
+        match tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.http_port + 1)).await {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("Error binding to port: {}", e);
@@ -82,15 +80,13 @@ pub async fn listen(
         liberdus.clone(),
     ));
 
-    let sm = Arc::clone(&subscription_manager);
+    let subscription_manager_for_listener = Arc::clone(&subscription_manager);
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(10));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
-
-        loop {
-            ticker.tick().await;
-            sm.discover().await;
-        }
+        collector::listen_account_update(
+            subscription_manager_for_listener.clone(),
+            subscription::listen_account_update_callback,
+        )
+        .await;
     });
     println!(
         "Websocket Listening on: {}",

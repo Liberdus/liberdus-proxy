@@ -466,19 +466,16 @@ impl Liberdus {
         };
         let url = format!("http://{}:{}/account/{}", node.ip, node.port, address);
         let account = match reqwest::get(&url).await {
-            Ok(r) => {
-                
-                match r.json::<GetAccountResp>().await {
-                    Ok(p) => p.account,
-                    Err(e) => {
-                        eprintln!("Failed to parse account: {}", e);
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Failed to parse account",
-                        ));
-                    }
+            Ok(r) => match r.json::<GetAccountResp>().await {
+                Ok(p) => p.account,
+                Err(e) => {
+                    eprintln!("Failed to parse account: {}", e);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed to parse account",
+                    ));
                 }
-            }
+            },
             Err(e) => {
                 eprintln!("Failed to get account: {}", e);
                 return Err(std::io::Error::new(
