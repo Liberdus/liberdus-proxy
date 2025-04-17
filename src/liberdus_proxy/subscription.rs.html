@@ -264,6 +264,11 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -466,8 +471,6 @@
     value: serde_json::Value,
     subscription_manager: Arc&lt;subscription::Manager&gt;,
 ) {
-    <span class="kw">let _ </span>= subscription_manager;
-
     <span class="kw">let </span>payload: AccountUpdatePayload = <span class="kw">match </span>serde_json::from_value(value) {
         <span class="prelude-val">Ok</span>(p) =&gt; p,
         <span class="prelude-val">Err</span>(e) =&gt; {
@@ -478,6 +481,13 @@
 
     <span class="kw">let </span>account_id = payload.data.accountId;
     <span class="kw">let </span>timestamp = payload.data.timestamp;
+
+    <span class="kw">let </span>read_guard = subscription_manager.states.read().<span class="kw">await</span>;
+    <span class="comment">// if no subscription for this account, return
+    </span><span class="kw">if </span>!read_guard.socks_by_account.contains_key(<span class="kw-2">&amp;</span>account_id) {
+        drop(read_guard);
+        <span class="kw">return</span>;
+    }
 
     <span class="kw">let </span><span class="kw-2">mut </span>write_guard = subscription_manager.states.write().<span class="kw">await</span>;
 
