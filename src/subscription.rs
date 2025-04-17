@@ -217,6 +217,7 @@ pub async fn listen_account_update_callback(
         drop(read_guard);
         return;
     }
+    drop(read_guard);
 
     let mut write_guard = subscription_manager.states.write().await;
 
