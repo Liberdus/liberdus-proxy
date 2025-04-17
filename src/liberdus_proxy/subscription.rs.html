@@ -367,6 +367,7 @@
 <a href="#367" id="367">367</a>
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -686,53 +687,54 @@
     <span class="kw">let </span>account_id = payload.data.accountId;
     <span class="kw">let </span>timestamp = payload.data.timestamp;
 
-    {
-        <span class="kw">let </span><span class="kw-2">mut </span>write_guard = subscription_manager.states.write().<span class="kw">await</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>write_guard = subscription_manager.states.write().<span class="kw">await</span>;
 
-        <span class="kw">let </span>old_timestamp = <span class="kw">match </span>write_guard.last_received.get(<span class="kw-2">&amp;</span>account_id) {
-            <span class="prelude-val">Some</span>(t) =&gt; <span class="kw-2">*</span>t,
-            <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
+    <span class="kw">let </span>old_timestamp = <span class="kw">match </span>write_guard.last_received.get(<span class="kw-2">&amp;</span>account_id) {
+        <span class="prelude-val">Some</span>(t) =&gt; <span class="kw-2">*</span>t,
+        <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
+    };
+
+    <span class="kw">if </span>timestamp &lt;= old_timestamp {
+        drop(write_guard);
+        <span class="kw">return</span>;
+    }
+
+    <span class="kw">let </span>timestmap = write_guard.last_received.get_mut(<span class="kw-2">&amp;</span>account_id);
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(t) = timestmap {
+        <span class="kw-2">*</span>t = timestamp;
+    }
+    drop(write_guard);
+
+    <span class="kw">let </span>read_guard = subscription_manager.states.read().<span class="kw">await</span>;
+    <span class="kw">let </span>sockets = read_guard
+        .socks_by_account
+        .get(<span class="kw-2">&amp;</span>account_id)
+        .unwrap_or(<span class="kw-2">&amp;</span>HashSet::new())
+        .clone();
+    drop(read_guard);
+
+    <span class="kw">if </span>sockets.is_empty() {
+        <span class="kw">return</span>;
+    }
+
+    <span class="kw">let </span>event = SubscriptionEvent {
+        account_id: account_id.clone(),
+        timestamp,
+    };
+
+    <span class="kw">let </span>msg = Message::Text(serde_json::to_string(<span class="kw-2">&amp;</span>event).unwrap().into());
+
+    <span class="kw">for </span>socket <span class="kw">in </span>sockets {
+        <span class="kw">let </span>socket_map = subscription_manager.socket_map.read().<span class="kw">await</span>;
+        <span class="kw">let </span>tx = <span class="kw">match </span>socket_map.get(<span class="kw-2">&amp;</span>socket) {
+            <span class="prelude-val">Some</span>(t) =&gt; t.clone(),
+            <span class="prelude-val">None </span>=&gt; {
+                subscription_manager.unsubscribe_all(<span class="kw-2">&amp;</span>socket).<span class="kw">await</span>;
+                <span class="kw">continue</span>;
+            }
         };
-
-        <span class="kw">if </span>timestamp &gt; old_timestamp {
-            <span class="kw">let </span>timestmap = write_guard.last_received.get_mut(<span class="kw-2">&amp;</span>account_id);
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(t) = timestmap {
-                <span class="kw-2">*</span>t = timestamp;
-            }
-            drop(write_guard);
-
-            <span class="kw">let </span>read_guard = subscription_manager.states.read().<span class="kw">await</span>;
-            <span class="kw">let </span>sockets = read_guard
-                .socks_by_account
-                .get(<span class="kw-2">&amp;</span>account_id)
-                .unwrap_or(<span class="kw-2">&amp;</span>HashSet::new())
-                .clone();
-            drop(read_guard);
-
-            <span class="kw">if </span>sockets.is_empty() {
-                <span class="kw">return</span>;
-            }
-
-            <span class="kw">let </span>event = SubscriptionEvent {
-                account_id: account_id.clone(),
-                timestamp,
-            };
-
-            <span class="kw">let </span>msg = Message::Text(serde_json::to_string(<span class="kw-2">&amp;</span>event).unwrap().into());
-
-            <span class="kw">for </span>socket <span class="kw">in </span>sockets {
-                <span class="kw">let </span>socket_map = subscription_manager.socket_map.read().<span class="kw">await</span>;
-                <span class="kw">let </span>tx = <span class="kw">match </span>socket_map.get(<span class="kw-2">&amp;</span>socket) {
-                    <span class="prelude-val">Some</span>(t) =&gt; t.clone(),
-                    <span class="prelude-val">None </span>=&gt; {
-                        subscription_manager.unsubscribe_all(<span class="kw-2">&amp;</span>socket).<span class="kw">await</span>;
-                        <span class="kw">continue</span>;
-                    }
-                };
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx.send(msg.clone()) {
-                    subscription_manager.unsubscribe_all(<span class="kw-2">&amp;</span>socket).<span class="kw">await</span>;
-                }
-            }
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = tx.send(msg.clone()) {
+            subscription_manager.unsubscribe_all(<span class="kw-2">&amp;</span>socket).<span class="kw">await</span>;
         }
     }
 }
