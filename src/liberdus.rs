@@ -497,46 +497,46 @@ pub struct GetAccountResp {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserAccount {
-    pub alias: String,
-    pub claimed_snapshot: bool,
-    pub data: AccountData,
-    pub email_hash: Option<String>,
-    pub hash: String,
+    // pub alias: String,
+    // pub claimed_snapshot: bool,
+    // pub data: AccountData,
+    // pub email_hash: Option<String>,
+    // pub hash: String,
     pub id: String,
-    pub last_maintenance: i64,
-    pub public_key: String,
+    // pub last_maintenance: i64,
+    // pub public_key: String,
     pub timestamp: u128,
-    #[serde(rename = "type")]
-    pub account_type: String,
-    pub verified: bool,
+    // #[serde(rename = "type")]
+    // pub account_type: String,
+    // pub verified: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountData {
-    pub balance: BiData,
-    pub chat_timestamp: u128,
-    pub chats: HashMap<String, ChatRoomInfo>,
-    pub friends: HashMap<String, serde_json::Value>,
-    pub payments: Vec<serde_json::Value>,
-    pub remove_stake_request: Option<serde_json::Value>,
-    pub stake: BiData,
-    pub toll: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiData {
-    pub data_type: String,
-    pub value: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatRoomInfo {
-    pub chat_id: String,
-    pub received_timestamp: u128,
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountData {
+//     pub balance: BiData,
+//     pub chat_timestamp: u128,
+//     pub chats: HashMap<String, ChatRoomInfo>,
+//     pub friends: HashMap<String, serde_json::Value>,
+//     pub payments: Vec<serde_json::Value>,
+//     pub remove_stake_request: Option<serde_json::Value>,
+//     pub stake: BiData,
+//     pub toll: Option<serde_json::Value>,
+// }
+//
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct BiData {
+//     pub data_type: String,
+//     pub value: String,
+// }
+//
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct ChatRoomInfo {
+//     pub chat_id: String,
+//     pub received_timestamp: u128,
+// }
 
 // write tests
 #[cfg(test)]

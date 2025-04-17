@@ -62,21 +62,31 @@ impl Manager {
     }
 
     async fn set_states(&self, addr: UserAccountAddress, socket_id: &ws::SocketId) {
-        let mut guard = self.states.write().await;
+        let account_current_timestamp = match self.liberdus.get_account_by_address(&addr).await {
+            Ok(r) => match serde_json::from_value::<liberdus::UserAccount>(r) {
+                Ok(a) => a.timestamp,
+                _ => 0,
+            },
+            _ => 0,
+        };
 
-        let subs = guard
+        let mut write_guard = self.states.write().await;
+        let subs = write_guard
             .accounts_by_sock
             .entry(socket_id.clone())
             .or_insert(HashSet::new());
         subs.insert(addr.clone());
 
-        let sockets = guard
+        let sockets = write_guard
             .socks_by_account
             .entry(addr.clone())
             .or_insert(HashSet::new());
         sockets.insert(socket_id.clone());
 
-        guard.last_received.entry(addr.clone()).or_insert(0);
+        write_guard
+            .last_received
+            .entry(addr.clone())
+            .or_insert(account_current_timestamp);
     }
 
     async fn remove_states(&self, addr: UserAccountAddress, socket_id: &ws::SocketId) {
@@ -131,120 +141,6 @@ impl Manager {
             self.remove_states(account, socket_id).await;
         }
         // println!("{:?}", self.states.read().await);
-    }
-
-    pub async fn discover(&self) {
-        let read_guard = self.states.read().await;
-
-        let accounts = read_guard
-            .socks_by_account
-            .keys()
-            .cloned()
-            .collect::<Vec<UserAccountAddress>>();
-
-        drop(read_guard);
-
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, Message)>();
-
-        if accounts.is_empty() {
-            return;
-        }
-
-        for address in accounts {
-            let liberdus = Arc::clone(&self.liberdus);
-            let states = Arc::clone(&self.states);
-            let tx = tx.clone();
-            tokio::spawn(async move {
-                let resp = match liberdus.get_account_by_address(&address).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        eprintln!("Error getting account: {}", e);
-                        return;
-                    }
-                };
-
-                let account = match serde_json::from_value::<liberdus::UserAccount>(resp) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        eprintln!("Error parsing account: {}", e);
-                        return;
-                    }
-                };
-
-                let new_timestamp = account.timestamp;
-
-                let guard = states.read().await;
-
-                let old_timestamp = match guard.last_received.get(&address) {
-                    Some(t) => *t,
-                    None => {
-                        // todo purge this address from all entries
-                        drop(guard);
-                        return;
-                    }
-                };
-
-                drop(guard);
-
-                if old_timestamp == 0 && new_timestamp > old_timestamp {
-                    let mut guard = states.write().await;
-                    let timestmap = guard.last_received.get_mut(&address);
-                    if let Some(t) = timestmap {
-                        *t = new_timestamp;
-                    }
-                    drop(guard);
-                    return;
-                }
-
-                if new_timestamp > old_timestamp {
-                    let sockets = states
-                        .read()
-                        .await
-                        .socks_by_account
-                        .get(&address)
-                        .unwrap_or(&HashSet::new())
-                        .clone();
-
-                    let event = SubscriptionEvent {
-                        account_id: address.clone(),
-                        timestamp: new_timestamp,
-                    };
-
-                    let tx = tx.clone();
-                    let msg = Message::Text(serde_json::to_string(&event).unwrap().into());
-
-                    let mut guard = states.write().await;
-                    let timestmap = guard.last_received.get_mut(&address);
-                    if let Some(t) = timestmap {
-                        *t = new_timestamp;
-                    }
-
-                    drop(guard);
-
-                    for socket in sockets {
-                        tx.clone()
-                            .send((socket.clone(), msg.clone()))
-                            .expect("Failed to send message");
-                    }
-                }
-            });
-        }
-
-        drop(tx);
-        while let Some((sock_id, msg)) = rx.recv().await {
-            let sock_transmitter = match self.socket_map.read().await.get(&sock_id) {
-                Some(t) => t.clone(),
-                None => {
-                    self.unsubscribe_all(&sock_id).await;
-                    continue;
-                }
-            };
-
-            if let Err(e) = sock_transmitter.send(msg) {
-                eprintln!("Error sending message: {}", e);
-                self.unsubscribe_all(&sock_id).await;
-            }
-        }
     }
 
     pub async fn subscribe(&self, socket_id: &ws::SocketId, address: &str) -> bool {

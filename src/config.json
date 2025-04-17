@@ -24,7 +24,7 @@
     "local_source": {
         "collector_api_ip":"0.0.0.0",
         "collector_api_port":6101,
-        "collector_event_server_ip":"0.0.0.0",
+        "collector_event_server_ip":"test.liberdus.com",
         "collector_event_server_port":4444
     }
 }

@@ -221,52 +221,52 @@ use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
 use crate::subscription;
 
 pub async fn listen_account_update<Fut>(
+    ip: &String,
+    port: &u16,
     subscription_state_manager: Arc<subscription::Manager>,
     callback: fn(serde_json::Value, Arc<subscription::Manager>) -> Fut,
 ) where
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
-    let server_url = "ws://0.0.0.0:4444".into_client_request().unwrap();
-
-    // keep retrying if fails
-    let ws_stream = {
-        loop {
-            match connect_async(server_url.clone()).await {
-                Ok((ws_stream, _)) => {
-                    println!("Ready to listen account update from collector");
-                    break ws_stream;
-                }
-                Err(e) => {
-                    eprintln!("Failed to connect: {:?}", e);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                }
-            }
-        }
-    };
-
-    let (_, mut read_half) = ws_stream.split();
-
-    // Just listen and print incoming messages
-    let subscription_state_manager_long_live = Arc::clone(&subscription_state_manager);
-    while let Some(msg) = read_half.next().await {
-        let sm = Arc::clone(&subscription_state_manager_long_live);
-        match msg {
-            Ok(message) => {
-                if message.is_text() || message.is_binary() {
-                    let data = message.into_data();
-                    let json: serde_json::Value = serde_json::from_slice(&data).unwrap();
-
-                    // Call the callback function with the received JSON
-                    tokio::spawn(async move {
-                        callback(json, sm.clone()).await;
-                    });
-                } else {
-                    println!("Received non-text message");
-                }
+    let server_url = format!("ws://{}:{}", ip, port)
+        .into_client_request()
+        .unwrap();
+    loop {
+        // keep retrying if fails
+        let ws_stream = match connect_async(server_url.clone()).await {
+            Ok((ws_stream, _)) => {
+                println!("Ready to listen account update from collector");
+                ws_stream
             }
             Err(e) => {
-                eprintln!("WebSocket error: {:?}", e);
-                break;
+                continue;
+            }
+        };
+
+        let (_, mut read_half) = ws_stream.split();
+
+        // Just listen and print incoming messages
+        let subscription_state_manager_long_live = Arc::clone(&subscription_state_manager);
+        while let Some(msg) = read_half.next().await {
+            let sm = Arc::clone(&subscription_state_manager_long_live);
+            match msg {
+                Ok(message) => {
+                    if message.is_text() || message.is_binary() {
+                        let data = message.into_data();
+                        let json: serde_json::Value = serde_json::from_slice(&data).unwrap();
+
+                        // Call the callback function with the received JSON
+                        tokio::spawn(async move {
+                            callback(json, sm.clone()).await;
+                        });
+                    } else {
+                        println!("Received non-text message");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("WebSocket error: {:?}", e);
+                    break;
+                }
             }
         }
     }

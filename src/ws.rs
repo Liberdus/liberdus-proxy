@@ -81,8 +81,11 @@ pub async fn listen(
     ));
 
     let subscription_manager_for_listener = Arc::clone(&subscription_manager);
+    let config_moved = Arc::clone(&config);
     tokio::spawn(async move {
         collector::listen_account_update(
+            &config_moved.local_source.collector_event_server_ip,
+            &config_moved.local_source.collector_event_server_port,
             subscription_manager_for_listener.clone(),
             subscription::listen_account_update_callback,
         )
