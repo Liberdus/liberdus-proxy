@@ -269,6 +269,7 @@
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -488,6 +489,7 @@
         drop(read_guard);
         <span class="kw">return</span>;
     }
+    drop(read_guard);
 
     <span class="kw">let </span><span class="kw-2">mut </span>write_guard = subscription_manager.states.write().<span class="kw">await</span>;
 
