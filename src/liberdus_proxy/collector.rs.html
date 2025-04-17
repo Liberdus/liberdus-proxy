@@ -494,52 +494,52 @@
 <span class="kw">use </span><span class="kw">crate</span>::subscription;
 
 <span class="kw">pub async fn </span>listen_account_update&lt;Fut&gt;(
+    ip: <span class="kw-2">&amp;</span>String,
+    port: <span class="kw-2">&amp;</span>u16,
     subscription_state_manager: Arc&lt;subscription::Manager&gt;,
     callback: <span class="kw">fn</span>(serde_json::Value, Arc&lt;subscription::Manager&gt;) -&gt; Fut,
 ) <span class="kw">where
     </span>Fut: std::future::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>,
 {
-    <span class="kw">let </span>server_url = <span class="string">"ws://0.0.0.0:4444"</span>.into_client_request().unwrap();
-
-    <span class="comment">// keep retrying if fails
-    </span><span class="kw">let </span>ws_stream = {
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>connect_async(server_url.clone()).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>((ws_stream, <span class="kw">_</span>)) =&gt; {
-                    <span class="macro">println!</span>(<span class="string">"Ready to listen account update from collector"</span>);
-                    <span class="kw">break </span>ws_stream;
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">eprintln!</span>(<span class="string">"Failed to connect: {:?}"</span>, e);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(<span class="number">3</span>)).<span class="kw">await</span>;
-                }
-            }
-        }
-    };
-
-    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>read_half) = ws_stream.split();
-
-    <span class="comment">// Just listen and print incoming messages
-    </span><span class="kw">let </span>subscription_state_manager_long_live = Arc::clone(<span class="kw-2">&amp;</span>subscription_state_manager);
-    <span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = read_half.next().<span class="kw">await </span>{
-        <span class="kw">let </span>sm = Arc::clone(<span class="kw-2">&amp;</span>subscription_state_manager_long_live);
-        <span class="kw">match </span>msg {
-            <span class="prelude-val">Ok</span>(message) =&gt; {
-                <span class="kw">if </span>message.is_text() || message.is_binary() {
-                    <span class="kw">let </span>data = message.into_data();
-                    <span class="kw">let </span>json: serde_json::Value = serde_json::from_slice(<span class="kw-2">&amp;</span>data).unwrap();
-
-                    <span class="comment">// Call the callback function with the received JSON
-                    </span>tokio::spawn(<span class="kw">async move </span>{
-                        callback(json, sm.clone()).<span class="kw">await</span>;
-                    });
-                } <span class="kw">else </span>{
-                    <span class="macro">println!</span>(<span class="string">"Received non-text message"</span>);
-                }
+    <span class="kw">let </span>server_url = <span class="macro">format!</span>(<span class="string">"ws://{}:{}"</span>, ip, port)
+        .into_client_request()
+        .unwrap();
+    <span class="kw">loop </span>{
+        <span class="comment">// keep retrying if fails
+        </span><span class="kw">let </span>ws_stream = <span class="kw">match </span>connect_async(server_url.clone()).<span class="kw">await </span>{
+            <span class="prelude-val">Ok</span>((ws_stream, <span class="kw">_</span>)) =&gt; {
+                <span class="macro">println!</span>(<span class="string">"Ready to listen account update from collector"</span>);
+                ws_stream
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">eprintln!</span>(<span class="string">"WebSocket error: {:?}"</span>, e);
-                <span class="kw">break</span>;
+                <span class="kw">continue</span>;
+            }
+        };
+
+        <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw-2">mut </span>read_half) = ws_stream.split();
+
+        <span class="comment">// Just listen and print incoming messages
+        </span><span class="kw">let </span>subscription_state_manager_long_live = Arc::clone(<span class="kw-2">&amp;</span>subscription_state_manager);
+        <span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = read_half.next().<span class="kw">await </span>{
+            <span class="kw">let </span>sm = Arc::clone(<span class="kw-2">&amp;</span>subscription_state_manager_long_live);
+            <span class="kw">match </span>msg {
+                <span class="prelude-val">Ok</span>(message) =&gt; {
+                    <span class="kw">if </span>message.is_text() || message.is_binary() {
+                        <span class="kw">let </span>data = message.into_data();
+                        <span class="kw">let </span>json: serde_json::Value = serde_json::from_slice(<span class="kw-2">&amp;</span>data).unwrap();
+
+                        <span class="comment">// Call the callback function with the received JSON
+                        </span>tokio::spawn(<span class="kw">async move </span>{
+                            callback(json, sm.clone()).<span class="kw">await</span>;
+                        });
+                    } <span class="kw">else </span>{
+                        <span class="macro">println!</span>(<span class="string">"Received non-text message"</span>);
+                    }
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">eprintln!</span>(<span class="string">"WebSocket error: {:?}"</span>, e);
+                    <span class="kw">break</span>;
+                }
             }
         }
     }

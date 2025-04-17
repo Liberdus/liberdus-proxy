@@ -1244,48 +1244,48 @@
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>UserAccount {
-    <span class="kw">pub </span>alias: String,
-    <span class="kw">pub </span>claimed_snapshot: bool,
-    <span class="kw">pub </span>data: AccountData,
-    <span class="kw">pub </span>email_hash: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="kw">pub </span>hash: String,
-    <span class="kw">pub </span>id: String,
-    <span class="kw">pub </span>last_maintenance: i64,
-    <span class="kw">pub </span>public_key: String,
-    <span class="kw">pub </span>timestamp: u128,
-    <span class="attr">#[serde(rename = <span class="string">"type"</span>)]
-    </span><span class="kw">pub </span>account_type: String,
-    <span class="kw">pub </span>verified: bool,
-}
+    <span class="comment">// pub alias: String,
+    // pub claimed_snapshot: bool,
+    // pub data: AccountData,
+    // pub email_hash: Option&lt;String&gt;,
+    // pub hash: String,
+    </span><span class="kw">pub </span>id: String,
+    <span class="comment">// pub last_maintenance: i64,
+    // pub public_key: String,
+    </span><span class="kw">pub </span>timestamp: u128,
+    <span class="comment">// #[serde(rename = "type")]
+    // pub account_type: String,
+    // pub verified: bool,
+</span>}
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">"camelCase"</span>)]
-</span><span class="kw">pub struct </span>AccountData {
-    <span class="kw">pub </span>balance: BiData,
-    <span class="kw">pub </span>chat_timestamp: u128,
-    <span class="kw">pub </span>chats: HashMap&lt;String, ChatRoomInfo&gt;,
-    <span class="kw">pub </span>friends: HashMap&lt;String, serde_json::Value&gt;,
-    <span class="kw">pub </span>payments: Vec&lt;serde_json::Value&gt;,
-    <span class="kw">pub </span>remove_stake_request: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
-    <span class="kw">pub </span>stake: BiData,
-    <span class="kw">pub </span>toll: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
-}
+<span class="comment">// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AccountData {
+//     pub balance: BiData,
+//     pub chat_timestamp: u128,
+//     pub chats: HashMap&lt;String, ChatRoomInfo&gt;,
+//     pub friends: HashMap&lt;String, serde_json::Value&gt;,
+//     pub payments: Vec&lt;serde_json::Value&gt;,
+//     pub remove_stake_request: Option&lt;serde_json::Value&gt;,
+//     pub stake: BiData,
+//     pub toll: Option&lt;serde_json::Value&gt;,
+// }
+//
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct BiData {
+//     pub data_type: String,
+//     pub value: String,
+// }
+//
+// #[derive(Debug, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct ChatRoomInfo {
+//     pub chat_id: String,
+//     pub received_timestamp: u128,
+// }
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">"camelCase"</span>)]
-</span><span class="kw">pub struct </span>BiData {
-    <span class="kw">pub </span>data_type: String,
-    <span class="kw">pub </span>value: String,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">"camelCase"</span>)]
-</span><span class="kw">pub struct </span>ChatRoomInfo {
-    <span class="kw">pub </span>chat_id: String,
-    <span class="kw">pub </span>received_timestamp: u128,
-}
-
-<span class="comment">// write tests
+// write tests
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
