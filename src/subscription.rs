@@ -317,53 +317,54 @@ pub async fn listen_account_update_callback(
     let account_id = payload.data.accountId;
     let timestamp = payload.data.timestamp;
 
-    {
-        let mut write_guard = subscription_manager.states.write().await;
+    let mut write_guard = subscription_manager.states.write().await;
 
-        let old_timestamp = match write_guard.last_received.get(&account_id) {
-            Some(t) => *t,
-            None => 0,
+    let old_timestamp = match write_guard.last_received.get(&account_id) {
+        Some(t) => *t,
+        None => 0,
+    };
+
+    if timestamp <= old_timestamp {
+        drop(write_guard);
+        return;
+    }
+
+    let timestmap = write_guard.last_received.get_mut(&account_id);
+    if let Some(t) = timestmap {
+        *t = timestamp;
+    }
+    drop(write_guard);
+
+    let read_guard = subscription_manager.states.read().await;
+    let sockets = read_guard
+        .socks_by_account
+        .get(&account_id)
+        .unwrap_or(&HashSet::new())
+        .clone();
+    drop(read_guard);
+
+    if sockets.is_empty() {
+        return;
+    }
+
+    let event = SubscriptionEvent {
+        account_id: account_id.clone(),
+        timestamp,
+    };
+
+    let msg = Message::Text(serde_json::to_string(&event).unwrap().into());
+
+    for socket in sockets {
+        let socket_map = subscription_manager.socket_map.read().await;
+        let tx = match socket_map.get(&socket) {
+            Some(t) => t.clone(),
+            None => {
+                subscription_manager.unsubscribe_all(&socket).await;
+                continue;
+            }
         };
-
-        if timestamp > old_timestamp {
-            let timestmap = write_guard.last_received.get_mut(&account_id);
-            if let Some(t) = timestmap {
-                *t = timestamp;
-            }
-            drop(write_guard);
-
-            let read_guard = subscription_manager.states.read().await;
-            let sockets = read_guard
-                .socks_by_account
-                .get(&account_id)
-                .unwrap_or(&HashSet::new())
-                .clone();
-            drop(read_guard);
-
-            if sockets.is_empty() {
-                return;
-            }
-
-            let event = SubscriptionEvent {
-                account_id: account_id.clone(),
-                timestamp,
-            };
-
-            let msg = Message::Text(serde_json::to_string(&event).unwrap().into());
-
-            for socket in sockets {
-                let socket_map = subscription_manager.socket_map.read().await;
-                let tx = match socket_map.get(&socket) {
-                    Some(t) => t.clone(),
-                    None => {
-                        subscription_manager.unsubscribe_all(&socket).await;
-                        continue;
-                    }
-                };
-                if let Err(e) = tx.send(msg.clone()) {
-                    subscription_manager.unsubscribe_all(&socket).await;
-                }
-            }
+        if let Err(e) = tx.send(msg.clone()) {
+            subscription_manager.unsubscribe_all(&socket).await;
         }
     }
 }
