@@ -249,19 +249,20 @@ pub async fn listen_account_update<Fut>(
         let subscription_state_manager_long_live = Arc::clone(&subscription_state_manager);
         while let Some(msg) = read_half.next().await {
             let sm = Arc::clone(&subscription_state_manager_long_live);
+
             match msg {
                 Ok(message) => {
-                    if message.is_text() || message.is_binary() {
-                        let data = message.into_data();
-                        let json: serde_json::Value = serde_json::from_slice(&data).unwrap();
+                    tokio::spawn(async move {
+                        if message.is_text() || message.is_binary() {
+                            let data = message.into_data();
+                            let json: serde_json::Value = serde_json::from_slice(&data).unwrap();
 
-                        // Call the callback function with the received JSON
-                        tokio::spawn(async move {
+                            // Call the callback function with the received JSON
                             callback(json, sm.clone()).await;
-                        });
-                    } else {
-                        println!("Received non-text message");
-                    }
+                        } else {
+                            println!("Received non-text message");
+                        }
+                    });
                 }
                 Err(e) => {
                     eprintln!("WebSocket error: {:?}", e);
