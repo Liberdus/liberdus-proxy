@@ -200,8 +200,6 @@ pub async fn listen_account_update_callback(
     value: serde_json::Value,
     subscription_manager: Arc<subscription::Manager>,
 ) {
-    let _ = subscription_manager;
-
     let payload: AccountUpdatePayload = match serde_json::from_value(value) {
         Ok(p) => p,
         Err(e) => {
@@ -212,6 +210,13 @@ pub async fn listen_account_update_callback(
 
     let account_id = payload.data.accountId;
     let timestamp = payload.data.timestamp;
+
+    let read_guard = subscription_manager.states.read().await;
+    // if no subscription for this account, return
+    if !read_guard.socks_by_account.contains_key(&account_id) {
+        drop(read_guard);
+        return;
+    }
 
     let mut write_guard = subscription_manager.states.write().await;
 
