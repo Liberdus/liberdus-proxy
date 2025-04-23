@@ -64,7 +64,7 @@ impl Manager {
     async fn set_states(&self, addr: UserAccountAddress, socket_id: &ws::SocketId) {
         let account_current_timestamp = match self.liberdus.get_account_by_address(&addr).await {
             Ok(r) => match serde_json::from_value::<liberdus::UserAccount>(r) {
-                Ok(a) => a.timestamp,
+                Ok(a) => a.data.chat_timestamp,
                 _ => 0,
             },
             _ => 0,
@@ -189,10 +189,16 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct AccountUpdate {
     accountId: String,
     timestamp: u128,
+    data: InnerData,
+}
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub struct InnerData {
+    data: serde_json::Value,
 }
 
 use crate::subscription;
@@ -209,7 +215,7 @@ pub async fn listen_account_update_callback(
     };
 
     let account_id = payload.data.accountId;
-    let timestamp = payload.data.timestamp;
+    let timestamp = payload.data.data.data["chatTimestamp"].as_u64().unwrap_or(0) as u128;
 
     let read_guard = subscription_manager.states.read().await;
     // if no subscription for this account, return

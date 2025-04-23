@@ -499,7 +499,7 @@ pub struct GetAccountResp {
 pub struct UserAccount {
     // pub alias: String,
     // pub claimed_snapshot: bool,
-    // pub data: AccountData,
+    pub data: AccountData,
     // pub email_hash: Option<String>,
     // pub hash: String,
     pub id: String,
@@ -511,18 +511,18 @@ pub struct UserAccount {
     // pub verified: bool,
 }
 
-// #[derive(Debug, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AccountData {
-//     pub balance: BiData,
-//     pub chat_timestamp: u128,
-//     pub chats: HashMap<String, ChatRoomInfo>,
-//     pub friends: HashMap<String, serde_json::Value>,
-//     pub payments: Vec<serde_json::Value>,
-//     pub remove_stake_request: Option<serde_json::Value>,
-//     pub stake: BiData,
-//     pub toll: Option<serde_json::Value>,
-// }
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountData {
+    // pub balance: BiData,
+    pub chat_timestamp: u128,
+    // pub chats: HashMap<String, ChatRoomInfo>,
+    // pub friends: HashMap<String, serde_json::Value>,
+    // pub payments: Vec<serde_json::Value>,
+    // pub remove_stake_request: Option<serde_json::Value>,
+    // pub stake: BiData,
+    // pub toll: Option<serde_json::Value>,
+}
 //
 // #[derive(Debug, Serialize, Deserialize)]
 // #[serde(rename_all = "camelCase")]
