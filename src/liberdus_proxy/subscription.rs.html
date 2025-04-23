@@ -270,6 +270,12 @@
 <a href="#270" id="270">270</a>
 <a href="#271" id="271">271</a>
 <a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
@@ -336,7 +342,7 @@
     <span class="kw">async fn </span>set_states(<span class="kw-2">&amp;</span><span class="self">self</span>, addr: UserAccountAddress, socket_id: <span class="kw-2">&amp;</span>ws::SocketId) {
         <span class="kw">let </span>account_current_timestamp = <span class="kw">match </span><span class="self">self</span>.liberdus.get_account_by_address(<span class="kw-2">&amp;</span>addr).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(r) =&gt; <span class="kw">match </span>serde_json::from_value::&lt;liberdus::UserAccount&gt;(r) {
-                <span class="prelude-val">Ok</span>(a) =&gt; a.timestamp,
+                <span class="prelude-val">Ok</span>(a) =&gt; a.data.chat_timestamp,
                 <span class="kw">_ </span>=&gt; <span class="number">0</span>,
             },
             <span class="kw">_ </span>=&gt; <span class="number">0</span>,
@@ -461,10 +467,16 @@
     serde_json::from_str(<span class="kw-2">&amp;</span>s).map_err(serde::de::Error::custom)
 }
 
+
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
 </span><span class="kw">pub struct </span>AccountUpdate {
     accountId: String,
     timestamp: u128,
+    data: InnerData,
+}
+<span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
+</span><span class="kw">pub struct </span>InnerData {
+    data: serde_json::Value,
 }
 
 <span class="kw">use </span><span class="kw">crate</span>::subscription;
@@ -481,7 +493,7 @@
     };
 
     <span class="kw">let </span>account_id = payload.data.accountId;
-    <span class="kw">let </span>timestamp = payload.data.timestamp;
+    <span class="kw">let </span>timestamp = payload.data.data.data[<span class="string">"chatTimestamp"</span>].as_u64().unwrap_or(<span class="number">0</span>) <span class="kw">as </span>u128;
 
     <span class="kw">let </span>read_guard = subscription_manager.states.read().<span class="kw">await</span>;
     <span class="comment">// if no subscription for this account, return

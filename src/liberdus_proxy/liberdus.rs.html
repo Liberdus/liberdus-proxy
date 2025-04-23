@@ -1246,8 +1246,8 @@
 </span><span class="kw">pub struct </span>UserAccount {
     <span class="comment">// pub alias: String,
     // pub claimed_snapshot: bool,
-    // pub data: AccountData,
-    // pub email_hash: Option&lt;String&gt;,
+    </span><span class="kw">pub </span>data: AccountData,
+    <span class="comment">// pub email_hash: Option&lt;String&gt;,
     // pub hash: String,
     </span><span class="kw">pub </span>id: String,
     <span class="comment">// pub last_maintenance: i64,
@@ -1258,19 +1258,19 @@
     // pub verified: bool,
 </span>}
 
-<span class="comment">// #[derive(Debug, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AccountData {
-//     pub balance: BiData,
-//     pub chat_timestamp: u128,
-//     pub chats: HashMap&lt;String, ChatRoomInfo&gt;,
-//     pub friends: HashMap&lt;String, serde_json::Value&gt;,
-//     pub payments: Vec&lt;serde_json::Value&gt;,
-//     pub remove_stake_request: Option&lt;serde_json::Value&gt;,
-//     pub stake: BiData,
-//     pub toll: Option&lt;serde_json::Value&gt;,
-// }
-//
+<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>AccountData {
+    <span class="comment">// pub balance: BiData,
+    </span><span class="kw">pub </span>chat_timestamp: u128,
+    <span class="comment">// pub chats: HashMap&lt;String, ChatRoomInfo&gt;,
+    // pub friends: HashMap&lt;String, serde_json::Value&gt;,
+    // pub payments: Vec&lt;serde_json::Value&gt;,
+    // pub remove_stake_request: Option&lt;serde_json::Value&gt;,
+    // pub stake: BiData,
+    // pub toll: Option&lt;serde_json::Value&gt;,
+</span>}
+<span class="comment">//
 // #[derive(Debug, Serialize, Deserialize)]
 // #[serde(rename_all = "camelCase")]
 // pub struct BiData {
