@@ -191,7 +191,7 @@ pub async fn get_receipt(
     tx_hash: &str,
 ) -> Result<serde_json::Value, String> {
     let url = format!(
-        "http://{}:{}/api/transaction?txId={}",
+        "http://{}:{}/api/transaction?appReceiptId={}",
         collector_ip, collector_port, tx_hash
     );
 
