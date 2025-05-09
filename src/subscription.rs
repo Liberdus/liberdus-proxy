@@ -189,7 +189,6 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct AccountUpdate {
     accountId: String,
@@ -215,7 +214,9 @@ pub async fn listen_account_update_callback(
     };
 
     let account_id = payload.data.accountId;
-    let timestamp = payload.data.data.data["chatTimestamp"].as_u64().unwrap_or(0) as u128;
+    let timestamp = payload.data.data.data["chatTimestamp"]
+        .as_u64()
+        .unwrap_or(0) as u128;
 
     let read_guard = subscription_manager.states.read().await;
     // if no subscription for this account, return

@@ -15,7 +15,7 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use crate::{config, liberdus, shardus_monitor, Stats};
+use crate::{collector, config, liberdus, shardus_monitor, Stats};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
@@ -105,6 +105,27 @@ where
         {
             Ok(Ok(())) => {
                 let (method, route) = get_route(&req_buf).unwrap();
+
+                if liberdus::is_old_receipt_route(&route).is_some() {
+                    let tx_hash = route.split('/').last().unwrap();
+                    let receipt = collector::get_receipt(
+                        &config.local_source.collector_api_ip,
+                        &config.local_source.collector_api_port,
+                        tx_hash,
+                    )
+                    .await;
+                    match receipt {
+                        Ok(receipt) => {
+                            let response = serde_json::to_vec(&receipt).unwrap();
+                            respond_with_json(&mut client_stream, response).await?;
+                        }
+                        Err(e) => {
+                            eprintln!("Error fetching receipt: {}", e);
+                            respond_with_notfound(&mut client_stream).await?;
+                        }
+                    }
+                    continue;
+                }
 
                 if shardus_monitor::proxy::is_monitor_route(&route) {
                     if let Err(e) = shardus_monitor::proxy::handle_request(
@@ -204,6 +225,38 @@ where
     let response =
         "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
+}
+
+pub async fn respond_with_notfound<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where
+    S: AsyncWrite + Unpin + Send,
+{
+    let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    client_stream.write_all(response.as_bytes()).await
+}
+
+pub async fn respond_with_json<S, B>(client_stream: &mut S, body: B) -> Result<(), std::io::Error>
+where
+    S: AsyncWrite + Unpin + Send,
+    B: AsRef<[u8]>,
+{
+    let body = body.as_ref();
+
+    // Build headers with the correct content length.
+    let header = format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         Connection: close\r\n\r\n",
+        body.len()
+    );
+
+    // Send headers, then body, then flush.
+    client_stream.write_all(header.as_bytes()).await?;
+    client_stream.write_all(body).await?;
+    client_stream.flush().await?;
+
+    Ok(())
 }
 
 /// Takes the stream, responds with a timeout error, and shutdown tcp

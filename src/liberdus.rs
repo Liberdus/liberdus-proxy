@@ -745,3 +745,20 @@ where
 
     Ok(())
 }
+
+/// Returns `(true, <tx_hash>)` when `route` is exactly
+/// `/old_receipt/<64-char hex>` with no extra path segments.
+/// Otherwise returns `(false, String::new())`.
+pub fn is_old_receipt_route(route: &str) -> Option<String> {
+    let mut parts = route.trim_start_matches('/').split('/');
+
+    match (parts.next(), parts.next(), parts.next()) {
+        // first segment,   second segment,    make sure there’s no 3rd segment
+        (Some(seg @ "old_receipt") | Some(seg @ "oldreceipt"), Some(hash), None)
+            if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
+        {
+            Some(hash.to_owned())
+        }
+        _ => None,
+    }
+}

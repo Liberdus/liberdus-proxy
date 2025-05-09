@@ -185,6 +185,27 @@ pub async fn get_account_by_address(
     }
 }
 
+pub async fn get_receipt(
+    collector_ip: &str,
+    collector_port: &u16,
+    tx_hash: &str,
+) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "http://{}:{}/api/transaction?txId={}",
+        collector_ip, collector_port, tx_hash
+    );
+
+    let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+
+    if resp.status() != reqwest::StatusCode::OK {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    resp.json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Placeholder function for fetching messages.
 ///
 /// # Notes
