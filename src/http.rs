@@ -385,3 +385,22 @@ pub fn extract_body(buffer: &[u8]) -> Vec<u8> {
     }
     body
 }
+
+pub fn split_head_body(buffer: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let mut head = Vec::new();
+    let mut body = Vec::new();
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        if let Some(body_start) = buffer_str.find("\r\n\r\n") {
+            head.extend_from_slice(&buffer[..body_start + 4]);
+            body.extend_from_slice(&buffer[body_start + 4..]);
+        }
+    }
+    (head, body)
+}
+
+pub fn join_head_body(head: &[u8], body: &[u8]) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    buffer.extend_from_slice(head);
+    buffer.extend_from_slice(body);
+    buffer
+}

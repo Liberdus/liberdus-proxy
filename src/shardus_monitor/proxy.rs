@@ -56,7 +56,7 @@ where
             .await?;
 
             if route == "/api/report" {
-                let body = http::extract_body(&server_resp_buffer);
+                let (mut head, body) = http::split_head_body(&server_resp_buffer);
 
                 let mut report: super::Report = match serde_json::from_slice(&body) {
                     Ok(report) => report,
@@ -86,7 +86,19 @@ where
                     .unwrap()
                     .as_millis();
 
-                server_resp_buffer = serde_json::to_vec(&report).unwrap();
+                let mut body = serde_json::to_vec(&report).unwrap();
+                let content_length = body.len();
+                http::set_http_header(
+                    &mut head,
+                    "Content-Length",
+                    content_length.to_string().as_str(),
+                );
+
+                server_resp_buffer = http::join_head_body(
+                    &head,
+                    &mut body,
+                );
+                
             };
 
             cache_map
@@ -111,10 +123,6 @@ where
         eprintln!("Empty response from server.");
         http::respond_with_internal_error(client_stream).await?;
         return Err("Empty response from server".into());
-    }
-
-    if route == "/api/report" {
-        http::set_http_header(&mut response_data, "Content-Type", "application/json");
     }
 
     http::set_http_header(&mut response_data, "Connection", "keep-alive");
