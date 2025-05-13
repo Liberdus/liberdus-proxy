@@ -319,11 +319,11 @@ fn init_caches() -> PayloadCacheMap {
     );
     map.insert(
         "/api/report".to_string(),
-        RwLock::new(PayloadCache::new(one_minute * 2)),
+        RwLock::new(PayloadCache::new(one_minute / 2)),
     );
     map.insert(
         "/api/status".to_string(),
-        RwLock::new(PayloadCache::new(one_minute * 2)),
+        RwLock::new(PayloadCache::new(one_minute / 2)),
     );
     map.insert(
         "/api/version".to_string(),
