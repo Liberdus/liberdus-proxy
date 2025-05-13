@@ -113,7 +113,10 @@ where
         return Err("Empty response from server".into());
     }
 
-    http::set_http_header(&mut response_data, "Content-Type", "application/json");
+    if route == "/api/report" {
+        http::set_http_header(&mut response_data, "Content-Type", "application/json");
+    }
+
     http::set_http_header(&mut response_data, "Connection", "keep-alive");
     http::set_http_header(
         &mut response_data,
