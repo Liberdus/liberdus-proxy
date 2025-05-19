@@ -414,12 +414,6 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module provides utilities to interact with a transaction collector API.
 //!
 //! The module includes:
@@ -736,17 +730,11 @@
     header = http::strip_route_root(<span class="kw-2">&amp;</span>header);
     request_buffer = http::join_head_body(<span class="kw-2">&amp;</span>header, <span class="kw-2">&amp;</span>body);
 
-    <span class="macro">println!</span>(
-        <span class="string">"Received request: {}"</span>,
-        String::from_utf8_lossy(<span class="kw-2">&amp;</span>request_buffer)
-    );
-
     <span class="kw">let </span>ip_port = <span class="macro">format!</span>(
         <span class="string">"{}:{}"</span>,
         config.local_source.collector_api_ip.clone(),
         config.local_source.collector_api_port.clone()
     );
-    <span class="macro">println!</span>(<span class="string">"Connecting to collector api server: {}"</span>, ip_port);
 
     <span class="kw">let </span><span class="kw-2">mut </span>server_stream = <span class="kw">match </span>timeout(
         Duration::from_millis(config.max_http_timeout_ms <span class="kw">as </span>u64),
