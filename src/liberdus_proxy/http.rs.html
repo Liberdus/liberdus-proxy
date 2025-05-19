@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/http.rs`."><title>http.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-c5d6553a23f1e5a6.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0 (eeb90cda1 2024-09-04)" data-channel="1.81.0" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-d2fab2bf619172d3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/http.rs`."><title>http.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0 (f6e511eec 2024-10-15)" data-channel="1.82.0" data-search-js="search-a99f1315e7cc5121.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-921df33f47b8780c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -332,6 +332,191 @@
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -349,7 +534,8 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-</span><span class="kw">use crate</span>::{config, liberdus, shardus_monitor, Stats};
+</span><span class="kw">use crate</span>::{collector, config, liberdus, shardus_monitor, Stats};
+<span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 <span class="kw">use </span>tokio::time::{timeout, Duration};
@@ -438,30 +624,89 @@
         .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
-                <span class="kw">let </span>(method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
+                <span class="kw">let </span>(_method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
 
-                <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(<span class="kw-2">&amp;</span>route) {
-                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
-                        req_buf,
-                        route,
-                        <span class="kw-2">&amp;mut </span>client_stream,
-                        config.clone(),
-                    )
-                    .<span class="kw">await
-                    </span>{
-                        <span class="macro">eprintln!</span>(<span class="string">"Error handling monitor request: {}"</span>, e);
+                <span class="kw">match </span>(
+                    shardus_monitor::proxy::is_monitor_route(route.as_str()),
+                    collector::is_collector_route(route.as_str()),
+                ) {
+                    (<span class="bool-val">true</span>, <span class="kw">_</span>) =&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
+                            req_buf,
+                            route,
+                            <span class="kw-2">&amp;mut </span>client_stream,
+                            config.clone(),
+                        )
+                        .<span class="kw">await
+                        </span>{
+                            <span class="macro">eprintln!</span>(<span class="string">"Error handling collector api request: {}"</span>, e);
+                        }
                     }
-                } <span class="kw">else if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
-                    req_buf,
-                    <span class="kw-2">&amp;mut </span>client_stream,
-                    liberdus.clone(),
-                    config.clone(),
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="macro">eprintln!</span>(<span class="string">"Error handling liberdus request: {}"</span>, e);
+                    (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
+                            collector::handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, config.clone())
+                                .<span class="kw">await
+                        </span>{
+                            <span class="macro">eprintln!</span>(<span class="string">"Error handling collector request: {}"</span>, e);
+                        }
+                    }
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
+                            req_buf,
+                            <span class="kw-2">&amp;mut </span>client_stream,
+                            liberdus.clone(),
+                            config.clone(),
+                        )
+                        .<span class="kw">await
+                        </span>{
+                            <span class="macro">eprintln!</span>(<span class="string">"Error handling validator request: {}"</span>, e);
+                        }
+                    }
                 }
-            }
+
+                <span class="comment">// if liberdus::is_old_receipt_route(&amp;route).is_some() {
+                //     let tx_hash = route.split('/').last().unwrap();
+                //     let receipt = collector::get_receipt(
+                //         &amp;config.local_source.collector_api_ip,
+                //         &amp;config.local_source.collector_api_port,
+                //         tx_hash,
+                //     )
+                //     .await;
+                //     match receipt {
+                //         Ok(receipt) =&gt; {
+                //             let response = serde_json::to_vec(&amp;receipt).unwrap();
+                //             respond_with_json(&amp;mut client_stream, response).await?;
+                //         }
+                //         Err(e) =&gt; {
+                //             eprintln!("Error fetching receipt: {}", e);
+                //             respond_with_notfound(&amp;mut client_stream).await?;
+                //         }
+                //     }
+                //     continue;
+                // }
+                //
+                // if shardus_monitor::proxy::is_monitor_route(&amp;route) {
+                //     if let Err(e) = shardus_monitor::proxy::handle_request(
+                //         req_buf,
+                //         route,
+                //         &amp;mut client_stream,
+                //         config.clone(),
+                //     )
+                //     .await
+                //     {
+                //         eprintln!("Error handling monitor request: {}", e);
+                //     }
+                // } else if let Err(e) = liberdus::handle_request(
+                //     req_buf,
+                //     &amp;mut client_stream,
+                //     liberdus.clone(),
+                //     config.clone(),
+                // )
+                // .await
+                // {
+                //     eprintln!("Error handling liberdus request: {}", e);
+                // }
+            </span>}
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error attempting to read bytes out of client stream: {}"</span>, e);
                 <span class="kw">break</span>;
@@ -539,6 +784,39 @@
         <span class="string">"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
     client_stream.write_all(response.as_bytes()).<span class="kw">await
 </span>}
+
+<span class="kw">pub async fn </span>respond_with_notfound&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
+<span class="kw">where
+    </span>S: AsyncWrite + Unpin + Send,
+{
+    <span class="kw">let </span>response = <span class="string">"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"</span>;
+    client_stream.write_all(response.as_bytes()).<span class="kw">await
+</span>}
+
+<span class="kw">pub async fn </span>respond_with_json&lt;S, B&gt;(client_stream: <span class="kw-2">&amp;mut </span>S, body: B) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
+<span class="kw">where
+    </span>S: AsyncWrite + Unpin + Send,
+    B: AsRef&lt;[u8]&gt;,
+{
+    <span class="kw">let </span>body = body.as_ref();
+
+    <span class="comment">// Build headers with the correct content length.
+    </span><span class="kw">let </span>header = <span class="macro">format!</span>(
+        <span class="string">"HTTP/1.1 200 OK\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Connection: close\r\n\r\n"</span>,
+        body.len()
+    );
+
+    <span class="comment">// Send headers, then body, then flush.
+    </span>client_stream.write_all(header.as_bytes()).<span class="kw">await</span><span class="question-mark">?</span>;
+    client_stream.write_all(body).<span class="kw">await</span><span class="question-mark">?</span>;
+    client_stream.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
+}
 
 <span class="doccomment">/// Takes the stream, responds with a timeout error, and shutdown tcp
 </span><span class="kw">pub async fn </span>respond_with_timeout&lt;S&gt;(client_stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt;
@@ -665,5 +943,97 @@
         }
     }
     body
+}
+
+<span class="kw">pub fn </span>split_head_body(buffer: <span class="kw-2">&amp;</span>[u8]) -&gt; (Vec&lt;u8&gt;, Vec&lt;u8&gt;) {
+    <span class="kw">let </span><span class="kw-2">mut </span>head = Vec::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>body = Vec::new();
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(buffer_str) = std::str::from_utf8(buffer) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(body_start) = buffer_str.find(<span class="string">"\r\n\r\n"</span>) {
+            head.extend_from_slice(<span class="kw-2">&amp;</span>buffer[..body_start + <span class="number">4</span>]);
+            body.extend_from_slice(<span class="kw-2">&amp;</span>buffer[body_start + <span class="number">4</span>..]);
+        }
+    }
+    (head, body)
+}
+
+<span class="kw">pub fn </span>join_head_body(head: <span class="kw-2">&amp;</span>[u8], body: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+    buffer.extend_from_slice(head);
+    buffer.extend_from_slice(body);
+    buffer
+}
+
+<span class="kw">pub fn </span>strip_route_root(header_bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;u8&gt; {
+    <span class="comment">// Try to decode as UTF-8; if it fails, just return the original bytes.
+    </span><span class="kw">let </span>text = <span class="kw">match </span>String::from_utf8_lossy(header_bytes) {
+        Cow::Borrowed(text) =&gt; text,
+        Cow::Owned(<span class="kw">_</span>) =&gt; <span class="kw">return </span>header_bytes.to_vec(),
+    };
+
+    <span class="comment">// Split off the request-line (first line) and the rest of the header.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>parts = text.splitn(<span class="number">2</span>, <span class="string">"\r\n"</span>);
+    <span class="kw">let </span>request_line = parts.next().unwrap_or(<span class="string">""</span>);
+    <span class="kw">let </span>rest = parts.next().unwrap_or(<span class="string">""</span>);
+
+    <span class="comment">// Break the request-line into METHOD, PATH, VERSION
+    </span><span class="kw">let </span><span class="kw-2">mut </span>rl_parts = request_line.splitn(<span class="number">3</span>, <span class="string">' '</span>);
+    <span class="kw">let </span>method = rl_parts.next().unwrap_or(<span class="string">""</span>);
+    <span class="kw">let </span>path = rl_parts.next().unwrap_or(<span class="string">""</span>);
+    <span class="kw">let </span>version = rl_parts.next().unwrap_or(<span class="string">""</span>);
+
+    <span class="comment">// If the path begins with "/collector", strip that segment.
+    </span><span class="kw">let </span>new_path: Cow&lt;str&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(stripped) = path.strip_prefix(<span class="string">"/collector"</span>) {
+        <span class="comment">// ensure we still have a leading slash
+        </span><span class="kw">if </span>stripped.is_empty() {
+            Cow::Borrowed(<span class="string">"/"</span>)
+        } <span class="kw">else </span>{
+            <span class="comment">// e.g. "/collector/x/y" → "/x/y"
+            </span>Cow::Owned(stripped.to_string())
+        }
+    } <span class="kw">else </span>{
+        Cow::Borrowed(path)
+    };
+
+    <span class="comment">// Reconstruct the request line
+    </span><span class="kw">let </span>new_request_line = <span class="macro">format!</span>(<span class="string">"{} {} {}"</span>, method, new_path, version);
+
+    <span class="comment">// Reassemble header text
+    </span><span class="kw">let </span><span class="kw-2">mut </span>out = String::with_capacity(header_bytes.len());
+    out.push_str(<span class="kw-2">&amp;</span>new_request_line);
+    <span class="kw">if </span>!rest.is_empty() {
+        out.push_str(<span class="string">"\r\n"</span>);
+        out.push_str(rest);
+    }
+
+    out.into_bytes()
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_strip_first_route() {
+        <span class="kw">let </span>hdr = <span class="string">b"GET /collector/a/b/c?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>;
+        <span class="kw">let </span>result = strip_route_root(hdr);
+        <span class="kw">let </span>expected = <span class="string">b"GET /a/b/c?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>;
+        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>result[..], <span class="kw-2">&amp;</span>expected[..]);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_no_prefix() {
+        <span class="kw">let </span>hdr = <span class="string">b"POST /other/path HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>;
+        <span class="kw">let </span>result = strip_route_root(hdr);
+        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>result[..], <span class="kw-2">&amp;</span>hdr[..]);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_empty_path() {
+        <span class="kw">let </span>hdr = <span class="string">b"GET /collector/ HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>;
+        <span class="kw">let </span>result = strip_route_root(hdr);
+        <span class="kw">let </span>expected = <span class="string">b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>;
+        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>result[..], <span class="kw-2">&amp;</span>expected[..]);
+    }
 }
 </code></pre></div></section></main></body></html>
