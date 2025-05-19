@@ -18,7 +18,6 @@
 
 use crate::config::Config;
 use crate::http;
-use crate::liberdus::Liberdus;
 
 /// Represents the API response for transaction queries.
 #[derive(serde::Deserialize)]
