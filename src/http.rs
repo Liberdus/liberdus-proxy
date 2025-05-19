@@ -16,6 +16,7 @@
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
 use crate::{collector, config, liberdus, shardus_monitor, Stats};
+use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
@@ -104,50 +105,88 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let (method, route) = get_route(&req_buf).unwrap();
+                let (_method, route) = get_route(&req_buf).unwrap();
 
-                if liberdus::is_old_receipt_route(&route).is_some() {
-                    let tx_hash = route.split('/').last().unwrap();
-                    let receipt = collector::get_receipt(
-                        &config.local_source.collector_api_ip,
-                        &config.local_source.collector_api_port,
-                        tx_hash,
-                    )
-                    .await;
-                    match receipt {
-                        Ok(receipt) => {
-                            let response = serde_json::to_vec(&receipt).unwrap();
-                            respond_with_json(&mut client_stream, response).await?;
-                        }
-                        Err(e) => {
-                            eprintln!("Error fetching receipt: {}", e);
-                            respond_with_notfound(&mut client_stream).await?;
+                match (
+                    shardus_monitor::proxy::is_monitor_route(route.as_str()),
+                    collector::is_collector_route(route.as_str()),
+                ) {
+                    (true, _) => {
+                        if let Err(e) = shardus_monitor::proxy::handle_request(
+                            req_buf,
+                            route,
+                            &mut client_stream,
+                            config.clone(),
+                        )
+                        .await
+                        {
+                            eprintln!("Error handling collector api request: {}", e);
                         }
                     }
-                    continue;
+                    (_, true) => {
+                        if let Err(e) =
+                            collector::handle_request(req_buf, &mut client_stream, config.clone())
+                                .await
+                        {
+                            eprintln!("Error handling collector request: {}", e);
+                        }
+                    }
+                    _ => {
+                        if let Err(e) = liberdus::handle_request(
+                            req_buf,
+                            &mut client_stream,
+                            liberdus.clone(),
+                            config.clone(),
+                        )
+                        .await
+                        {
+                            eprintln!("Error handling validator request: {}", e);
+                        }
+                    }
                 }
 
-                if shardus_monitor::proxy::is_monitor_route(&route) {
-                    if let Err(e) = shardus_monitor::proxy::handle_request(
-                        req_buf,
-                        route,
-                        &mut client_stream,
-                        config.clone(),
-                    )
-                    .await
-                    {
-                        eprintln!("Error handling monitor request: {}", e);
-                    }
-                } else if let Err(e) = liberdus::handle_request(
-                    req_buf,
-                    &mut client_stream,
-                    liberdus.clone(),
-                    config.clone(),
-                )
-                .await
-                {
-                    eprintln!("Error handling liberdus request: {}", e);
-                }
+                // if liberdus::is_old_receipt_route(&route).is_some() {
+                //     let tx_hash = route.split('/').last().unwrap();
+                //     let receipt = collector::get_receipt(
+                //         &config.local_source.collector_api_ip,
+                //         &config.local_source.collector_api_port,
+                //         tx_hash,
+                //     )
+                //     .await;
+                //     match receipt {
+                //         Ok(receipt) => {
+                //             let response = serde_json::to_vec(&receipt).unwrap();
+                //             respond_with_json(&mut client_stream, response).await?;
+                //         }
+                //         Err(e) => {
+                //             eprintln!("Error fetching receipt: {}", e);
+                //             respond_with_notfound(&mut client_stream).await?;
+                //         }
+                //     }
+                //     continue;
+                // }
+                //
+                // if shardus_monitor::proxy::is_monitor_route(&route) {
+                //     if let Err(e) = shardus_monitor::proxy::handle_request(
+                //         req_buf,
+                //         route,
+                //         &mut client_stream,
+                //         config.clone(),
+                //     )
+                //     .await
+                //     {
+                //         eprintln!("Error handling monitor request: {}", e);
+                //     }
+                // } else if let Err(e) = liberdus::handle_request(
+                //     req_buf,
+                //     &mut client_stream,
+                //     liberdus.clone(),
+                //     config.clone(),
+                // )
+                // .await
+                // {
+                //     eprintln!("Error handling liberdus request: {}", e);
+                // }
             }
             Ok(Err(e)) => {
                 eprintln!("Error attempting to read bytes out of client stream: {}", e);
@@ -404,4 +443,77 @@ pub fn join_head_body(head: &[u8], body: &[u8]) -> Vec<u8> {
     buffer.extend_from_slice(head);
     buffer.extend_from_slice(body);
     buffer
+}
+
+pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
+    // Try to decode as UTF-8; if it fails, just return the original bytes.
+    let text = match String::from_utf8_lossy(header_bytes) {
+        Cow::Borrowed(text) => text,
+        Cow::Owned(_) => return header_bytes.to_vec(),
+    };
+
+    // Split off the request-line (first line) and the rest of the header.
+    let mut parts = text.splitn(2, "\r\n");
+    let request_line = parts.next().unwrap_or("");
+    let rest = parts.next().unwrap_or("");
+
+    // Break the request-line into METHOD, PATH, VERSION
+    let mut rl_parts = request_line.splitn(3, ' ');
+    let method = rl_parts.next().unwrap_or("");
+    let path = rl_parts.next().unwrap_or("");
+    let version = rl_parts.next().unwrap_or("");
+
+    // If the path begins with "/collector", strip that segment.
+    let new_path: Cow<str> = if let Some(stripped) = path.strip_prefix("/collector") {
+        // ensure we still have a leading slash
+        if stripped.is_empty() {
+            Cow::Borrowed("/")
+        } else {
+            // e.g. "/collector/x/y" → "/x/y"
+            Cow::Owned(stripped.to_string())
+        }
+    } else {
+        Cow::Borrowed(path)
+    };
+
+    // Reconstruct the request line
+    let new_request_line = format!("{} {} {}", method, new_path, version);
+
+    // Reassemble header text
+    let mut out = String::with_capacity(header_bytes.len());
+    out.push_str(&new_request_line);
+    if !rest.is_empty() {
+        out.push_str("\r\n");
+        out.push_str(rest);
+    }
+
+    out.into_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_first_route() {
+        let hdr = b"GET /collector/a/b/c?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        let result = strip_route_root(hdr);
+        let expected = b"GET /a/b/c?foo=bar HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        assert_eq!(&result[..], &expected[..]);
+    }
+
+    #[test]
+    fn test_no_prefix() {
+        let hdr = b"POST /other/path HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        let result = strip_route_root(hdr);
+        assert_eq!(&result[..], &hdr[..]);
+    }
+
+    #[test]
+    fn test_empty_path() {
+        let hdr = b"GET /collector/ HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        let result = strip_route_root(hdr);
+        let expected = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        assert_eq!(&result[..], &expected[..]);
+    }
 }

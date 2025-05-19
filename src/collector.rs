@@ -16,6 +16,10 @@
 //! - [`get_message`]: Placeholder for message-related functionality.
 //! - [`insert_field`]: Inserts a key-value pair into a JSON object.
 
+use crate::config::Config;
+use crate::http;
+use crate::liberdus::Liberdus;
+
 /// Represents the API response for transaction queries.
 #[derive(serde::Deserialize)]
 struct TxResp {
@@ -234,9 +238,14 @@ fn insert_field(
     obj
 }
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
+use tokio::{
+    io::{AsyncRead, AsyncWrite, AsyncWriteExt},
+    net::TcpStream,
+    time::timeout,
+};
 use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
 
 use crate::subscription;
@@ -292,4 +301,123 @@ pub async fn listen_account_update<Fut>(
             }
         }
     }
+}
+
+pub async fn handle_request<S>(
+    mut request_buffer: Vec<u8>,
+    client_stream: &mut S,
+    config: Arc<Config>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    S: AsyncWrite + AsyncRead + Unpin + Send,
+{
+    let (mut header, body) = http::split_head_body(&request_buffer);
+    header = http::strip_route_root(&header);
+    request_buffer = http::join_head_body(&header, &body);
+
+    println!(
+        "Received request: {}",
+        String::from_utf8_lossy(&request_buffer)
+    );
+
+    let ip_port = format!(
+        "{}:{}",
+        config.local_source.collector_api_ip.clone(),
+        config.local_source.collector_api_port.clone()
+    );
+    println!("Connecting to collector api server: {}", ip_port);
+
+    let mut server_stream = match timeout(
+        Duration::from_millis(config.max_http_timeout_ms as u64),
+        TcpStream::connect(ip_port),
+    )
+    .await
+    {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(e)) => {
+            eprintln!("Error connecting to collector api server: {}", e);
+            http::respond_with_timeout(client_stream).await?;
+            return Err(Box::new(e));
+        }
+        Err(_) => {
+            eprintln!("Timeout connecting to collector api server.");
+            http::respond_with_timeout(client_stream).await?;
+            return Err("Timeout connecting to collector api server".into());
+        }
+    };
+
+    // Forward the client's request to the server
+    let mut response_data = vec![];
+    match timeout(
+        Duration::from_millis(config.max_http_timeout_ms as u64),
+        server_stream.write_all(&request_buffer),
+    )
+    .await
+    {
+        Ok(Ok(())) => match http::collect_http(&mut server_stream, &mut response_data).await {
+            Ok(()) => {
+                tokio::spawn(async move {
+                    server_stream.shutdown().await.unwrap();
+                    drop(server_stream);
+                });
+            }
+            Err(e) => {
+                eprintln!("Error reading response from collector api server: {}", e);
+                http::respond_with_internal_error(client_stream).await?;
+                tokio::spawn(async move {
+                    server_stream.shutdown().await.unwrap();
+                    drop(server_stream);
+                });
+                return Err(Box::new(e));
+            }
+        },
+        Ok(Err(e)) => {
+            eprintln!("Error forwarding request to collector api server: {}", e);
+            http::respond_with_internal_error(client_stream).await?;
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err(Box::new(e));
+        }
+        Err(_) => {
+            eprintln!("Timeout forwarding request to collector api server.");
+            http::respond_with_timeout(client_stream).await?;
+            tokio::spawn(async move {
+                server_stream.shutdown().await.unwrap();
+                drop(server_stream);
+            });
+            return Err("Timeout forwarding request to collector api server".into());
+        }
+    }
+    println!("Successfully forwarded request to collector api server.");
+
+    drop(request_buffer);
+
+    if response_data.is_empty() {
+        eprintln!("Empty response from collector api server.");
+        http::respond_with_internal_error(client_stream).await?;
+        return Err("Empty response from collector api server".into());
+    }
+
+    http::set_http_header(&mut response_data, "Connection", "keep-alive");
+    http::set_http_header(
+        &mut response_data,
+        "Keep-Alive",
+        format!("timeout={}", config.tcp_keepalive_time_sec).as_str(),
+    );
+    http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+
+    // Relay the collected response to the client
+    if let Err(e) = client_stream.write_all(&response_data).await {
+        eprintln!("Error relaying response to client: {}", e);
+        http::respond_with_internal_error(client_stream).await?;
+        return Err(Box::new(e));
+    }
+
+    Ok(())
+}
+
+pub fn is_collector_route(route: &str) -> bool {
+    route.starts_with("/collector")
 }

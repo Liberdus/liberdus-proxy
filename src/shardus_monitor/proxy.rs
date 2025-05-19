@@ -94,11 +94,7 @@ where
                     content_length.to_string().as_str(),
                 );
 
-                server_resp_buffer = http::join_head_body(
-                    &head,
-                    &mut body,
-                );
-                
+                server_resp_buffer = http::join_head_body(&head, &mut body);
             };
 
             cache_map
