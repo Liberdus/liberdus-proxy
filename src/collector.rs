@@ -314,17 +314,11 @@ where
     header = http::strip_route_root(&header);
     request_buffer = http::join_head_body(&header, &body);
 
-    println!(
-        "Received request: {}",
-        String::from_utf8_lossy(&request_buffer)
-    );
-
     let ip_port = format!(
         "{}:{}",
         config.local_source.collector_api_ip.clone(),
         config.local_source.collector_api_port.clone()
     );
-    println!("Connecting to collector api server: {}", ip_port);
 
     let mut server_stream = match timeout(
         Duration::from_millis(config.max_http_timeout_ms as u64),
