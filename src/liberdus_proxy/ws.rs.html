@@ -304,6 +304,19 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{collector, subscription};
 <span class="kw">use crate</span>::{config, liberdus, subscription::WebsocketIncoming, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
@@ -316,6 +329,7 @@
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
 </span><span class="kw">pub enum </span>Methods {
     ChatEvent,
+    GetSubscriptions,
 }
 
 <span class="kw">pub type </span>SocketId = String;
@@ -535,6 +549,18 @@
                                     <span class="macro">eprintln!</span>(<span class="string">"Error handling subscription: {}"</span>, e);
                                 }
                             }
+                            Methods::GetSubscriptions =&gt; {
+                                <span class="kw">let </span>subscriptions = subscription_manager_long_lived
+                                    .get_all_subscriptions()
+                                    .<span class="kw">await</span>;
+                                <span class="kw">let </span>resp = <span class="macro">serde_json::json!</span>({
+                                    <span class="string">"id"</span>: <span class="number">0</span>,
+                                    <span class="string">"result"</span>: subscriptions,
+                                    <span class="string">"error"</span>: null,
+                                });
+                                tx.send(Message::Text(resp.to_string().into()))
+                                    .expect(<span class="string">"ws stream is closed"</span>);
+                            }
                         }
                     }
                     <span class="kw">_ </span>=&gt; {
@@ -571,15 +597,15 @@
     subscription_manager: Arc&lt;subscription::Manager&gt;,
     socket_id: SocketId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
-    <span class="kw">match </span>msg.params.<span class="number">0 </span>{
+    <span class="kw">match </span>msg.params[<span class="number">0</span>].as_str().unwrap_or(<span class="string">""</span>).into() {
         subscription::SubscriptionActions::Subscribe =&gt; {
             <span class="kw">let </span>status = subscription_manager
-                .subscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str())
+                .subscribe(<span class="kw-2">&amp;</span>socket_id, msg.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into())
                 .<span class="kw">await</span>;
 
             <span class="kw">let </span>resp = subscription::SubscriptionResponse {
                 result: status,
-                account_id: msg.params.<span class="number">1</span>.clone(),
+                account_id: msg.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into(),
                 error: <span class="prelude-val">None</span>,
             };
 
@@ -591,12 +617,12 @@
         }
         subscription::SubscriptionActions::Unsubscribe =&gt; {
             <span class="kw">let </span>status = subscription_manager
-                .unsubscribe(<span class="kw-2">&amp;</span>socket_id, msg.params.<span class="number">1</span>.as_str())
+                .unsubscribe(<span class="kw-2">&amp;</span>socket_id, msg.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into())
                 .<span class="kw">await</span>;
 
             <span class="kw">let </span>resp = subscription::SubscriptionResponse {
                 result: status,
-                account_id: msg.params.<span class="number">1</span>.clone(),
+                account_id: msg.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into(),
                 error: <span class="prelude-val">None</span>,
             };
 
