@@ -47,9 +47,11 @@ mod subscription;
 mod tls;
 mod ws;
 
+use std::collections::HashMap;
 use std::fs;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_rustls::TlsAcceptor;
 
 struct Stats {
@@ -162,16 +164,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pid = std::process::id();
     println!("PID: {}", pid);
 
+    let sock_map = Arc::new(RwLock::new(HashMap::new()));
+    let subscription_manager = Arc::new(subscription::Manager::new(
+        sock_map.clone(),
+        liberdus_http.clone(),
+    ));
+
+    let manager_for_http = Arc::clone(&subscription_manager);
     let http_listener_task = tokio::spawn(async move {
-        http::listen(liberdus_http, config_http, server_stats_http, tls_http).await;
+        http::listen(
+            liberdus_http,
+            manager_for_http,
+            config_http,
+            server_stats_http,
+            tls_http,
+        )
+        .await;
     });
 
-    let ws_liberdus = Arc::clone(&lbd);
     let ws_config = Arc::clone(&config);
     let ws_server_stats = Arc::clone(&server_stats);
     let ws_tls = tls_acceptor.clone();
+    let ws_liberdus = Arc::clone(&lbd);
+
     let websocket_listener_task = tokio::spawn(async move {
-        ws::listen(ws_liberdus, ws_config, ws_server_stats, ws_tls).await;
+        ws::listen(
+            ws_liberdus,
+            subscription_manager,
+            sock_map,
+            ws_config,
+            ws_server_stats,
+            ws_tls,
+        )
+        .await;
     });
 
     tokio::try_join!(http_listener_task, websocket_listener_task)?;

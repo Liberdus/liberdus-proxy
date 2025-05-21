@@ -61,6 +61,8 @@ fn generate_uuid() -> String {
 
 pub async fn listen(
     liberdus: Arc<liberdus::Liberdus>,
+    subscription_manager: Arc<subscription::Manager>,
+    sock_map: Arc<RwLock<HashMap<SocketId, UnboundedSender<Message>>>>,
     config: Arc<config::Config>,
     server_stats: Arc<Stats>,
     tls_acceptor: Option<TlsAcceptor>,
@@ -75,11 +77,6 @@ pub async fn listen(
                 std::process::exit(1);
             }
         };
-    let sock_map = Arc::new(RwLock::new(HashMap::new()));
-    let subscription_manager = Arc::new(subscription::Manager::new(
-        sock_map.clone(),
-        liberdus.clone(),
-    ));
 
     let subscription_manager_for_listener = Arc::clone(&subscription_manager);
     let config_moved = Arc::clone(&config);

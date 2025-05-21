@@ -15,12 +15,31 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use crate::{collector, config, liberdus, shardus_monitor, Stats};
+use crate::{collector, config, liberdus, shardus_monitor, subscription, Stats};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsAcceptor;
+
+enum Application {
+    Validator,
+    Collector,
+    Monitor,
+    Debug,
+}
+
+fn get_application(route: &str) -> Application {
+    if shardus_monitor::proxy::is_monitor_route(route) {
+        Application::Monitor
+    } else if collector::is_collector_route(route) {
+        Application::Collector
+    } else if route.starts_with("/get_subscriptions") {
+        Application::Debug
+    } else {
+        Application::Validator
+    }
+}
 
 /// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
@@ -91,6 +110,7 @@ where
 pub async fn handle_stream<StreamLike>(
     mut client_stream: StreamLike,
     liberdus: Arc<liberdus::Liberdus>,
+    subscription_manager: Arc<subscription::Manager>,
     config: Arc<config::Config>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
@@ -107,11 +127,8 @@ where
             Ok(Ok(())) => {
                 let (_method, route) = get_route(&req_buf).unwrap();
 
-                match (
-                    shardus_monitor::proxy::is_monitor_route(route.as_str()),
-                    collector::is_collector_route(route.as_str()),
-                ) {
-                    (true, _) => {
+                match get_application(route.as_str()) {
+                    Application::Collector => {
                         if let Err(e) = shardus_monitor::proxy::handle_request(
                             req_buf,
                             route,
@@ -123,7 +140,7 @@ where
                             eprintln!("Error handling collector api request: {}", e);
                         }
                     }
-                    (_, true) => {
+                    Application::Monitor => {
                         if let Err(e) =
                             collector::handle_request(req_buf, &mut client_stream, config.clone())
                                 .await
@@ -131,7 +148,7 @@ where
                             eprintln!("Error handling collector request: {}", e);
                         }
                     }
-                    _ => {
+                    Application::Validator => {
                         if let Err(e) = liberdus::handle_request(
                             req_buf,
                             &mut client_stream,
@@ -143,50 +160,19 @@ where
                             eprintln!("Error handling validator request: {}", e);
                         }
                     }
+                    Application::Debug => {
+                        let subscribed_accounts =
+                            subscription_manager.get_all_subscriptions().await;
+                        let body = serde_json::json!({
+                            "subscribed_accounts": subscribed_accounts
+                        });
+                        respond_with_json(
+                            &mut client_stream,
+                            serde_json::to_string(&body).unwrap(),
+                        )
+                        .await?;
+                    }
                 }
-
-                // if liberdus::is_old_receipt_route(&route).is_some() {
-                //     let tx_hash = route.split('/').last().unwrap();
-                //     let receipt = collector::get_receipt(
-                //         &config.local_source.collector_api_ip,
-                //         &config.local_source.collector_api_port,
-                //         tx_hash,
-                //     )
-                //     .await;
-                //     match receipt {
-                //         Ok(receipt) => {
-                //             let response = serde_json::to_vec(&receipt).unwrap();
-                //             respond_with_json(&mut client_stream, response).await?;
-                //         }
-                //         Err(e) => {
-                //             eprintln!("Error fetching receipt: {}", e);
-                //             respond_with_notfound(&mut client_stream).await?;
-                //         }
-                //     }
-                //     continue;
-                // }
-                //
-                // if shardus_monitor::proxy::is_monitor_route(&route) {
-                //     if let Err(e) = shardus_monitor::proxy::handle_request(
-                //         req_buf,
-                //         route,
-                //         &mut client_stream,
-                //         config.clone(),
-                //     )
-                //     .await
-                //     {
-                //         eprintln!("Error handling monitor request: {}", e);
-                //     }
-                // } else if let Err(e) = liberdus::handle_request(
-                //     req_buf,
-                //     &mut client_stream,
-                //     liberdus.clone(),
-                //     config.clone(),
-                // )
-                // .await
-                // {
-                //     eprintln!("Error handling liberdus request: {}", e);
-                // }
             }
             Ok(Err(e)) => {
                 eprintln!("Error attempting to read bytes out of client stream: {}", e);
@@ -339,6 +325,7 @@ pub fn get_route(buffer: &[u8]) -> Option<(String, String)> {
 }
 pub async fn listen(
     liberdus: Arc<liberdus::Liberdus>,
+    subscription_manager: Arc<subscription::Manager>,
     config: Arc<config::Config>,
     server_stats: Arc<Stats>,
     tls_acceptor: Option<TlsAcceptor>,
@@ -372,6 +359,7 @@ pub async fn listen(
         };
 
         let liberdus = Arc::clone(&liberdus);
+        let subscription_manager = Arc::clone(&subscription_manager);
         let config = Arc::clone(&config);
         let stats = Arc::clone(&server_stats);
         let tls_acceptor = match tls_acceptor.is_some() && config.tls.enabled {
@@ -389,7 +377,8 @@ pub async fn listen(
                 Some(tls_acceptor) => match tls_acceptor.accept(raw_stream).await {
                     Ok(tls_stream) => {
                         let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                        let e = handle_stream(tls_stream, liberdus, config).await;
+                        let e =
+                            handle_stream(tls_stream, liberdus, subscription_manager, config).await;
                         if let Err(e) = e {
                             eprintln!("Handle Stream Error: {}", e);
                         }
@@ -403,7 +392,7 @@ pub async fn listen(
                     }
                 },
                 None => {
-                    let e = handle_stream(raw_stream, liberdus, config).await;
+                    let e = handle_stream(raw_stream, liberdus, subscription_manager, config).await;
                     if let Err(e) = e {
                         eprintln!("Handle Stream Error: {}", e);
                     }

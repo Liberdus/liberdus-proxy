@@ -221,10 +221,9 @@ pub struct InnerData {
     data: serde_json::Value,
 }
 
-use crate::subscription;
 pub async fn listen_account_update_callback(
     value: serde_json::Value,
-    subscription_manager: Arc<subscription::Manager>,
+    subscription_manager: Arc<Manager>,
 ) {
     let payload: AccountUpdatePayload = match serde_json::from_value(value) {
         Ok(p) => p,
