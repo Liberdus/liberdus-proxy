@@ -13,10 +13,20 @@ pub enum SubscriptionActions {
     Unsubscribe,
 }
 
+impl From<&str> for SubscriptionActions {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "subscribe" => SubscriptionActions::Subscribe,
+            "unsubscribe" => SubscriptionActions::Unsubscribe,
+            _ => panic!("Invalid action"),
+        }
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct WebsocketIncoming {
     pub method: ws::Methods,
-    pub params: (SubscriptionActions, String),
+    pub params: Vec<serde_json::Value>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -169,6 +179,17 @@ impl Manager {
         }
 
         false
+    }
+
+    pub async fn get_all_subscriptions(&self) -> Vec<String> {
+        let read_guard = self.states.read().await;
+        let mut all_subscriptions = Vec::new();
+
+        for (account, _) in &read_guard.socks_by_account {
+            all_subscriptions.push(account.clone());
+        }
+        drop(read_guard);
+        all_subscriptions
     }
 }
 

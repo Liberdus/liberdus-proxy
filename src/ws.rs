@@ -10,6 +10,7 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum Methods {
     ChatEvent,
+    GetSubscriptions,
 }
 
 pub type SocketId = String;
@@ -229,6 +230,18 @@ where
                                     eprintln!("Error handling subscription: {}", e);
                                 }
                             }
+                            Methods::GetSubscriptions => {
+                                let subscriptions = subscription_manager_long_lived
+                                    .get_all_subscriptions()
+                                    .await;
+                                let resp = serde_json::json!({
+                                    "id": 0,
+                                    "result": subscriptions,
+                                    "error": null,
+                                });
+                                tx.send(Message::Text(resp.to_string().into()))
+                                    .expect("ws stream is closed");
+                            }
                         }
                     }
                     _ => {
@@ -265,15 +278,15 @@ async fn handle_subscriptions(
     subscription_manager: Arc<subscription::Manager>,
     socket_id: SocketId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match msg.params.0 {
+    match msg.params[0].as_str().unwrap_or("").into() {
         subscription::SubscriptionActions::Subscribe => {
             let status = subscription_manager
-                .subscribe(&socket_id, msg.params.1.as_str())
+                .subscribe(&socket_id, msg.params[1].as_str().unwrap_or("").into())
                 .await;
 
             let resp = subscription::SubscriptionResponse {
                 result: status,
-                account_id: msg.params.1.clone(),
+                account_id: msg.params[1].as_str().unwrap_or("").into(),
                 error: None,
             };
 
@@ -285,12 +298,12 @@ async fn handle_subscriptions(
         }
         subscription::SubscriptionActions::Unsubscribe => {
             let status = subscription_manager
-                .unsubscribe(&socket_id, msg.params.1.as_str())
+                .unsubscribe(&socket_id, msg.params[1].as_str().unwrap_or("").into())
                 .await;
 
             let resp = subscription::SubscriptionResponse {
                 result: status,
-                account_id: msg.params.1.clone(),
+                account_id: msg.params[1].as_str().unwrap_or("").into(),
                 error: None,
             };
 
