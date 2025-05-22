@@ -188,17 +188,18 @@ where
     };
 
     let (write, mut read) = ws_stream.split();
-    
+
     let socket_write_half = Arc::new(Mutex::new(write));
 
     let id = socket_id.clone();
     let subscription_manager_long_lived = Arc::clone(&subscription_manager);
 
-
     let last_pong = Arc::new(AtomicU64::new(
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
     ));
-
 
     let last_pong_1 = Arc::clone(&last_pong);
     let socket_id_1 = socket_id.clone();
@@ -235,7 +236,8 @@ where
                             subscription_manager_long_lived.clone(),
                             tx.clone(),
                             id.clone(),
-                        ).await;
+                        )
+                        .await;
                         if let Err(e) = e {
                             eprintln!("Error handling request: {}", e);
                             let resp = rpc::generate_error_response(
@@ -245,11 +247,13 @@ where
                             );
                             tx.send(resp).unwrap();
                         }
-
                     }
                     Message::Pong(_) => {
-                        println!("Pong received");
-                        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                        println!("Pong received, socket id {:?}", socket_id_1);
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
                         last_pong_1.store(now, Ordering::Relaxed);
                     }
                     _ => {
@@ -268,25 +272,25 @@ where
     //heartbeat ping
     let write_half_for_ping_pong = Arc::clone(&socket_write_half);
     let ping_task = tokio::spawn(async move {
-        let heartbeat_interval_sec = 3;
+        let heartbeat_interval_sec = 60;
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(heartbeat_interval_sec)).await;
 
             let last = last_pong.load(Ordering::Relaxed);
             let elapsed = SystemTime::now()
-                .duration_since(UNIX_EPOCH).unwrap().as_secs()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
                 .saturating_sub(last);
             if elapsed > heartbeat_interval_sec {
-                subscription_manager
-                    .unsubscribe_all(&socket_id)
-                    .await;
+                subscription_manager.unsubscribe_all(&socket_id).await;
                 let mut guard = write_half_for_ping_pong.lock().await;
                 let _ = guard.close().await;
                 drop(guard);
                 break;
             }
 
-            let mut guard = write_half_for_ping_pong.lock().await; 
+            let mut guard = write_half_for_ping_pong.lock().await;
             if let Err(_e) = guard.send(Message::Ping("Ping".into())).await {
                 let _ = guard.close().await;
                 drop(guard);
@@ -295,7 +299,6 @@ where
             drop(guard);
         }
     });
-
 
     while let Some(msg) = rx.recv().await {
         let json = match serde_json::to_value(&msg) {
@@ -306,7 +309,12 @@ where
             }
         };
 
-        match socket_write_half.lock().await.send(Message::Text(json.to_string().into())).await {
+        match socket_write_half
+            .lock()
+            .await
+            .send(Message::Text(json.to_string().into()))
+            .await
+        {
             Ok(_) => {}
             Err(e) => {
                 eprintln!("Error sending message: {}", e);
@@ -320,4 +328,3 @@ where
 
     Ok(())
 }
-

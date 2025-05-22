@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::{liberdus, rpc};
 use crate::ws;
+use crate::{liberdus, rpc};
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -25,6 +25,7 @@ impl From<&str> for SubscriptionActions {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct Notification {
+    pub action: String,
     pub account_id: UserAccountAddress,
     pub timestamp: u128,
 }
@@ -271,6 +272,7 @@ pub async fn listen_account_update_callback(
     }
 
     let noti = Notification {
+        action: "Notification".to_string(),
         account_id: account_id.clone(),
         timestamp,
     };
@@ -298,7 +300,10 @@ pub async fn listen_account_update_callback(
 pub mod rpc_handler {
     use std::sync::Arc;
 
-    use crate::{rpc::{self, RpcResponse}, ws::{SocketId, WebsocketIncoming}};
+    use crate::{
+        rpc::{self, RpcResponse},
+        ws::{SocketId, WebsocketIncoming},
+    };
 
     use super::Manager;
 
@@ -316,11 +321,11 @@ pub mod rpc_handler {
                 rpc::generate_success_response(
                     Some(req.id),
                     serde_json::json!({
+                        "action": "subscribe",
                         "subscription_status": true,
                         "account_id": req.params[1].as_str().unwrap_or(""),
                     }),
                 )
-
             }
             super::SubscriptionActions::Unsubscribe => {
                 let status = subscription_manager
@@ -330,27 +335,24 @@ pub mod rpc_handler {
                 rpc::generate_success_response(
                     Some(req.id),
                     serde_json::json!({
+                        "action": "unsubscribe",
                         "unsubscribe_status": status,
                         "account_id": req.params[1].as_str().unwrap_or(""),
                     }),
                 )
-
             }
         }
-
     }
 
     pub async fn get_all_subscriptions(
         request: WebsocketIncoming,
         subscription_manager: Arc<Manager>,
     ) -> RpcResponse {
-
-        let subscriptions = subscription_manager
-            .get_all_subscriptions()
-            .await;
+        let subscriptions = subscription_manager.get_all_subscriptions().await;
         rpc::generate_success_response(
             Some(request.id),
             serde_json::json!({
+                "action": "GetSubscriptions",
                 "subscribed_accounts": subscriptions
             }),
         )

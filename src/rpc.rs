@@ -3,8 +3,10 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::{subscription, ws::{Methods, SocketId}};
-
+use crate::{
+    subscription,
+    ws::{Methods, SocketId},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RpcRequest<M> {
@@ -75,14 +77,12 @@ pub fn generate_error_response(id: Option<u32>, error_msg: String, code: i32) ->
     }
 }
 
-
 pub async fn handle(
     request: crate::ws::WebsocketIncoming,
     subscription_manager: Arc<subscription::Manager>,
     transmitter: tokio::sync::mpsc::UnboundedSender<RpcResponse>,
     socket_id: SocketId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let resp = match request.method {
         Methods::ChatEvent => {
             subscription::rpc_handler::handle_subscriptions(
@@ -93,19 +93,14 @@ pub async fn handle(
             .await
         }
         Methods::GetSubscriptions => {
-            subscription::rpc_handler::get_all_subscriptions(
-                request,
-                subscription_manager,
-            ).await
+            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).await
         }
     };
 
-    transmitter
-        .send(resp)
-        .map_err(|e| {
-            eprintln!("Failed to send response: {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, "Failed to send response")
-        })?;
+    transmitter.send(resp).map_err(|e| {
+        eprintln!("Failed to send response: {}", e);
+        std::io::Error::new(std::io::ErrorKind::Other, "Failed to send response")
+    })?;
 
     Ok(())
 }

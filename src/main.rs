@@ -42,11 +42,11 @@ mod config;
 mod crypto;
 mod http;
 mod liberdus;
+mod rpc;
 mod shardus_monitor;
 mod subscription;
 mod tls;
 mod ws;
-mod rpc;
 
 use std::collections::HashMap;
 use std::fs;
