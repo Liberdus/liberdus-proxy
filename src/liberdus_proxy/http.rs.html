@@ -511,12 +511,6 @@
 <a href="#511" id="511">511</a>
 <a href="#512" id="512">512</a>
 <a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -534,12 +528,31 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-</span><span class="kw">use crate</span>::{collector, config, liberdus, shardus_monitor, Stats};
+</span><span class="kw">use crate</span>::{collector, config, liberdus, shardus_monitor, subscription, Stats};
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 <span class="kw">use </span>tokio::time::{timeout, Duration};
 <span class="kw">use </span>tokio_rustls::TlsAcceptor;
+
+<span class="kw">enum </span>Application {
+    Validator,
+    Collector,
+    Monitor,
+    Debug,
+}
+
+<span class="kw">fn </span>get_application(route: <span class="kw-2">&amp;</span>str) -&gt; Application {
+    <span class="kw">if </span>shardus_monitor::proxy::is_monitor_route(route) {
+        Application::Monitor
+    } <span class="kw">else if </span>collector::is_collector_route(route) {
+        Application::Collector
+    } <span class="kw">else if </span>route.starts_with(<span class="string">"/get_subscriptions"</span>) {
+        Application::Debug
+    } <span class="kw">else </span>{
+        Application::Validator
+    }
+}
 
 <span class="doccomment">/// Reads from the stream until the end of the headers or the end of the body if the Content-Length
 /// header is present. The data is collected into the buffer.
@@ -610,6 +623,7 @@
 </span><span class="kw">pub async fn </span>handle_stream&lt;StreamLike&gt;(
     <span class="kw-2">mut </span>client_stream: StreamLike,
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
+    subscription_manager: Arc&lt;subscription::Manager&gt;,
     config: Arc&lt;config::Config&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt;
 <span class="kw">where
@@ -626,11 +640,8 @@
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(())) =&gt; {
                 <span class="kw">let </span>(_method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
 
-                <span class="kw">match </span>(
-                    shardus_monitor::proxy::is_monitor_route(route.as_str()),
-                    collector::is_collector_route(route.as_str()),
-                ) {
-                    (<span class="bool-val">true</span>, <span class="kw">_</span>) =&gt; {
+                <span class="kw">match </span>get_application(route.as_str()) {
+                    Application::Collector =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
                             req_buf,
                             route,
@@ -642,7 +653,7 @@
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling collector api request: {}"</span>, e);
                         }
                     }
-                    (<span class="kw">_</span>, <span class="bool-val">true</span>) =&gt; {
+                    Application::Monitor =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
                             collector::handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, config.clone())
                                 .<span class="kw">await
@@ -650,7 +661,7 @@
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling collector request: {}"</span>, e);
                         }
                     }
-                    <span class="kw">_ </span>=&gt; {
+                    Application::Validator =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = liberdus::handle_request(
                             req_buf,
                             <span class="kw-2">&amp;mut </span>client_stream,
@@ -662,51 +673,25 @@
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling validator request: {}"</span>, e);
                         }
                     }
-                }
+                    Application::Debug =&gt; {
+                        <span class="kw">if </span>!config.debug {
+                            respond_with_notfound(<span class="kw-2">&amp;mut </span>client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">continue</span>;
+                        }
 
-                <span class="comment">// if liberdus::is_old_receipt_route(&amp;route).is_some() {
-                //     let tx_hash = route.split('/').last().unwrap();
-                //     let receipt = collector::get_receipt(
-                //         &amp;config.local_source.collector_api_ip,
-                //         &amp;config.local_source.collector_api_port,
-                //         tx_hash,
-                //     )
-                //     .await;
-                //     match receipt {
-                //         Ok(receipt) =&gt; {
-                //             let response = serde_json::to_vec(&amp;receipt).unwrap();
-                //             respond_with_json(&amp;mut client_stream, response).await?;
-                //         }
-                //         Err(e) =&gt; {
-                //             eprintln!("Error fetching receipt: {}", e);
-                //             respond_with_notfound(&amp;mut client_stream).await?;
-                //         }
-                //     }
-                //     continue;
-                // }
-                //
-                // if shardus_monitor::proxy::is_monitor_route(&amp;route) {
-                //     if let Err(e) = shardus_monitor::proxy::handle_request(
-                //         req_buf,
-                //         route,
-                //         &amp;mut client_stream,
-                //         config.clone(),
-                //     )
-                //     .await
-                //     {
-                //         eprintln!("Error handling monitor request: {}", e);
-                //     }
-                // } else if let Err(e) = liberdus::handle_request(
-                //     req_buf,
-                //     &amp;mut client_stream,
-                //     liberdus.clone(),
-                //     config.clone(),
-                // )
-                // .await
-                // {
-                //     eprintln!("Error handling liberdus request: {}", e);
-                // }
-            </span>}
+                        <span class="kw">let </span>subscribed_accounts =
+                            subscription_manager.get_all_subscriptions().<span class="kw">await</span>;
+                        <span class="kw">let </span>body = <span class="macro">serde_json::json!</span>({
+                            <span class="string">"subscribed_accounts"</span>: subscribed_accounts
+                        });
+                        respond_with_json(
+                            <span class="kw-2">&amp;mut </span>client_stream,
+                            serde_json::to_string(<span class="kw-2">&amp;</span>body).unwrap(),
+                        )
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    }
+                }
+            }
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(e)) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error attempting to read bytes out of client stream: {}"</span>, e);
                 <span class="kw">break</span>;
@@ -858,6 +843,7 @@
 }
 <span class="kw">pub async fn </span>listen(
     liberdus: Arc&lt;liberdus::Liberdus&gt;,
+    subscription_manager: Arc&lt;subscription::Manager&gt;,
     config: Arc&lt;config::Config&gt;,
     server_stats: Arc&lt;Stats&gt;,
     tls_acceptor: <span class="prelude-ty">Option</span>&lt;TlsAcceptor&gt;,
@@ -891,6 +877,7 @@
         };
 
         <span class="kw">let </span>liberdus = Arc::clone(<span class="kw-2">&amp;</span>liberdus);
+        <span class="kw">let </span>subscription_manager = Arc::clone(<span class="kw-2">&amp;</span>subscription_manager);
         <span class="kw">let </span>config = Arc::clone(<span class="kw-2">&amp;</span>config);
         <span class="kw">let </span>stats = Arc::clone(<span class="kw-2">&amp;</span>server_stats);
         <span class="kw">let </span>tls_acceptor = <span class="kw">match </span>tls_acceptor.is_some() &amp;&amp; config.tls.enabled {
@@ -908,7 +895,8 @@
                 <span class="prelude-val">Some</span>(tls_acceptor) =&gt; <span class="kw">match </span>tls_acceptor.accept(raw_stream).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(tls_stream) =&gt; {
                         <span class="kw">let </span>tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                        <span class="kw">let </span>e = handle_stream(tls_stream, liberdus, config).<span class="kw">await</span>;
+                        <span class="kw">let </span>e =
+                            handle_stream(tls_stream, liberdus, subscription_manager, config).<span class="kw">await</span>;
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
                             <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {}"</span>, e);
                         }
@@ -922,7 +910,7 @@
                     }
                 },
                 <span class="prelude-val">None </span>=&gt; {
-                    <span class="kw">let </span>e = handle_stream(raw_stream, liberdus, config).<span class="kw">await</span>;
+                    <span class="kw">let </span>e = handle_stream(raw_stream, liberdus, subscription_manager, config).<span class="kw">await</span>;
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
                         <span class="macro">eprintln!</span>(<span class="string">"Handle Stream Error: {}"</span>, e);
                     }
