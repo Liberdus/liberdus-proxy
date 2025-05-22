@@ -248,6 +248,7 @@ where
 
                     }
                     Message::Pong(_) => {
+                        println!("Pong received");
                         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                         last_pong_1.store(now, Ordering::Relaxed);
                     }
