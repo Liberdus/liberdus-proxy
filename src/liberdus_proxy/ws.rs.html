@@ -320,6 +320,7 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{collector, rpc, subscription};
 <span class="kw">use crate</span>::{config, liberdus, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
@@ -570,6 +571,7 @@
 
                     }
                     Message::Pong(<span class="kw">_</span>) =&gt; {
+                        <span class="macro">println!</span>(<span class="string">"Pong received"</span>);
                         <span class="kw">let </span>now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                         last_pong_1.store(now, Ordering::Relaxed);
                     }
