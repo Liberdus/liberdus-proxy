@@ -356,13 +356,15 @@
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tokio_tungstenite::tungstenite::Message;
 
-<span class="kw">use crate</span>::{liberdus, rpc};
 <span class="kw">use </span><span class="kw">crate</span>::ws;
+<span class="kw">use crate</span>::{liberdus, rpc};
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[serde(rename_all = <span class="string">"lowercase"</span>)]
@@ -383,6 +385,7 @@
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize, Debug)]
 </span><span class="kw">pub struct </span>Notification {
+    <span class="kw">pub </span>action: String,
     <span class="kw">pub </span>account_id: UserAccountAddress,
     <span class="kw">pub </span>timestamp: u128,
 }
@@ -629,6 +632,7 @@
     }
 
     <span class="kw">let </span>noti = Notification {
+        action: <span class="string">"Notification"</span>.to_string(),
         account_id: account_id.clone(),
         timestamp,
     };
@@ -656,7 +660,10 @@
 <span class="kw">pub mod </span>rpc_handler {
     <span class="kw">use </span>std::sync::Arc;
 
-    <span class="kw">use crate</span>::{rpc::{<span class="self">self</span>, RpcResponse}, ws::{SocketId, WebsocketIncoming}};
+    <span class="kw">use crate</span>::{
+        rpc::{<span class="self">self</span>, RpcResponse},
+        ws::{SocketId, WebsocketIncoming},
+    };
 
     <span class="kw">use </span><span class="kw">super</span>::Manager;
 
@@ -674,11 +681,11 @@
                 rpc::generate_success_response(
                     <span class="prelude-val">Some</span>(req.id),
                     <span class="macro">serde_json::json!</span>({
+                        <span class="string">"action"</span>: <span class="string">"subscribe"</span>,
                         <span class="string">"subscription_status"</span>: <span class="bool-val">true</span>,
                         <span class="string">"account_id"</span>: req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>),
                     }),
                 )
-
             }
             <span class="kw">super</span>::SubscriptionActions::Unsubscribe =&gt; {
                 <span class="kw">let </span>status = subscription_manager
@@ -688,27 +695,24 @@
                 rpc::generate_success_response(
                     <span class="prelude-val">Some</span>(req.id),
                     <span class="macro">serde_json::json!</span>({
+                        <span class="string">"action"</span>: <span class="string">"unsubscribe"</span>,
                         <span class="string">"unsubscribe_status"</span>: status,
                         <span class="string">"account_id"</span>: req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>),
                     }),
                 )
-
             }
         }
-
     }
 
     <span class="kw">pub async fn </span>get_all_subscriptions(
         request: WebsocketIncoming,
         subscription_manager: Arc&lt;Manager&gt;,
     ) -&gt; RpcResponse {
-
-        <span class="kw">let </span>subscriptions = subscription_manager
-            .get_all_subscriptions()
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>subscriptions = subscription_manager.get_all_subscriptions().<span class="kw">await</span>;
         rpc::generate_success_response(
             <span class="prelude-val">Some</span>(request.id),
             <span class="macro">serde_json::json!</span>({
+                <span class="string">"action"</span>: <span class="string">"GetSubscriptions"</span>,
                 <span class="string">"subscribed_accounts"</span>: subscriptions
             }),
         )

@@ -321,6 +321,13 @@
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{collector, rpc, subscription};
 <span class="kw">use crate</span>::{config, liberdus, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
@@ -511,17 +518,18 @@
     };
 
     <span class="kw">let </span>(write, <span class="kw-2">mut </span>read) = ws_stream.split();
-    
+
     <span class="kw">let </span>socket_write_half = Arc::new(Mutex::new(write));
 
     <span class="kw">let </span>id = socket_id.clone();
     <span class="kw">let </span>subscription_manager_long_lived = Arc::clone(<span class="kw-2">&amp;</span>subscription_manager);
 
-
     <span class="kw">let </span>last_pong = Arc::new(AtomicU64::new(
-      SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
     ));
-
 
     <span class="kw">let </span>last_pong_1 = Arc::clone(<span class="kw-2">&amp;</span>last_pong);
     <span class="kw">let </span>socket_id_1 = socket_id.clone();
@@ -558,7 +566,8 @@
                             subscription_manager_long_lived.clone(),
                             tx.clone(),
                             id.clone(),
-                        ).<span class="kw">await</span>;
+                        )
+                        .<span class="kw">await</span>;
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = e {
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling request: {}"</span>, e);
                             <span class="kw">let </span>resp = rpc::generate_error_response(
@@ -568,11 +577,13 @@
                             );
                             tx.send(resp).unwrap();
                         }
-
                     }
                     Message::Pong(<span class="kw">_</span>) =&gt; {
-                        <span class="macro">println!</span>(<span class="string">"Pong received"</span>);
-                        <span class="kw">let </span>now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                        <span class="macro">println!</span>(<span class="string">"Pong received, socket id {:?}"</span>, socket_id_1);
+                        <span class="kw">let </span>now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
                         last_pong_1.store(now, Ordering::Relaxed);
                     }
                     <span class="kw">_ </span>=&gt; {
@@ -591,25 +602,25 @@
     <span class="comment">//heartbeat ping
     </span><span class="kw">let </span>write_half_for_ping_pong = Arc::clone(<span class="kw-2">&amp;</span>socket_write_half);
     <span class="kw">let </span>ping_task = tokio::spawn(<span class="kw">async move </span>{
-        <span class="kw">let </span>heartbeat_interval_sec = <span class="number">3</span>;
+        <span class="kw">let </span>heartbeat_interval_sec = <span class="number">60</span>;
         <span class="kw">loop </span>{
             tokio::time::sleep(tokio::time::Duration::from_secs(heartbeat_interval_sec)).<span class="kw">await</span>;
 
             <span class="kw">let </span>last = last_pong.load(Ordering::Relaxed);
             <span class="kw">let </span>elapsed = SystemTime::now()
-                .duration_since(UNIX_EPOCH).unwrap().as_secs()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
                 .saturating_sub(last);
             <span class="kw">if </span>elapsed &gt; heartbeat_interval_sec {
-                subscription_manager
-                    .unsubscribe_all(<span class="kw-2">&amp;</span>socket_id)
-                    .<span class="kw">await</span>;
+                subscription_manager.unsubscribe_all(<span class="kw-2">&amp;</span>socket_id).<span class="kw">await</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>guard = write_half_for_ping_pong.lock().<span class="kw">await</span>;
                 <span class="kw">let _ </span>= guard.close().<span class="kw">await</span>;
                 drop(guard);
                 <span class="kw">break</span>;
             }
 
-            <span class="kw">let </span><span class="kw-2">mut </span>guard = write_half_for_ping_pong.lock().<span class="kw">await</span>; 
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = write_half_for_ping_pong.lock().<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(_e) = guard.send(Message::Ping(<span class="string">"Ping"</span>.into())).<span class="kw">await </span>{
                 <span class="kw">let _ </span>= guard.close().<span class="kw">await</span>;
                 drop(guard);
@@ -618,7 +629,6 @@
             drop(guard);
         }
     });
-
 
     <span class="kw">while let </span><span class="prelude-val">Some</span>(msg) = rx.recv().<span class="kw">await </span>{
         <span class="kw">let </span>json = <span class="kw">match </span>serde_json::to_value(<span class="kw-2">&amp;</span>msg) {
@@ -629,7 +639,12 @@
             }
         };
 
-        <span class="kw">match </span>socket_write_half.lock().<span class="kw">await</span>.send(Message::Text(json.to_string().into())).<span class="kw">await </span>{
+        <span class="kw">match </span>socket_write_half
+            .lock()
+            .<span class="kw">await
+            </span>.send(Message::Text(json.to_string().into()))
+            .<span class="kw">await
+        </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">eprintln!</span>(<span class="string">"Error sending message: {}"</span>, e);
@@ -643,5 +658,4 @@
 
     <span class="prelude-val">Ok</span>(())
 }
-
 </code></pre></div></section></main></body></html>

@@ -104,18 +104,15 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_tungstenite::tungstenite::Message;
 
-<span class="kw">use crate</span>::{subscription, ws::{Methods, SocketId}};
-
+<span class="kw">use crate</span>::{
+    subscription,
+    ws::{Methods, SocketId},
+};
 
 <span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 </span><span class="kw">pub struct </span>RpcRequest&lt;M&gt; {
@@ -186,14 +183,12 @@
     }
 }
 
-
 <span class="kw">pub async fn </span>handle(
     request: <span class="kw">crate</span>::ws::WebsocketIncoming,
     subscription_manager: Arc&lt;subscription::Manager&gt;,
     transmitter: tokio::sync::mpsc::UnboundedSender&lt;RpcResponse&gt;,
     socket_id: SocketId,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
-
     <span class="kw">let </span>resp = <span class="kw">match </span>request.method {
         Methods::ChatEvent =&gt; {
             subscription::rpc_handler::handle_subscriptions(
@@ -204,19 +199,14 @@
             .<span class="kw">await
         </span>}
         Methods::GetSubscriptions =&gt; {
-            subscription::rpc_handler::get_all_subscriptions(
-                request,
-                subscription_manager,
-            ).<span class="kw">await
+            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).<span class="kw">await
         </span>}
     };
 
-    transmitter
-        .send(resp)
-        .map_err(|e| {
-            <span class="macro">eprintln!</span>(<span class="string">"Failed to send response: {}"</span>, e);
-            std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to send response"</span>)
-        })<span class="question-mark">?</span>;
+    transmitter.send(resp).map_err(|e| {
+        <span class="macro">eprintln!</span>(<span class="string">"Failed to send response: {}"</span>, e);
+        std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to send response"</span>)
+    })<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
