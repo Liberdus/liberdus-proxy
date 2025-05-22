@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::liberdus;
+use crate::{liberdus, rpc};
 use crate::ws;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -24,13 +24,7 @@ impl From<&str> for SubscriptionActions {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-pub struct WebsocketIncoming {
-    pub method: ws::Methods,
-    pub params: Vec<serde_json::Value>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-pub struct SubscriptionEvent {
+pub struct Notification {
     pub account_id: UserAccountAddress,
     pub timestamp: u128,
 }
@@ -276,12 +270,15 @@ pub async fn listen_account_update_callback(
         return;
     }
 
-    let event = SubscriptionEvent {
+    let noti = Notification {
         account_id: account_id.clone(),
         timestamp,
     };
 
-    let msg = Message::Text(serde_json::to_string(&event).unwrap().into());
+    let resp = rpc::generate_success_response(
+        None,
+        serde_json::to_value(noti).unwrap_or(serde_json::Value::Null),
+    );
 
     for socket in sockets {
         let socket_map = subscription_manager.socket_map.read().await;
@@ -292,8 +289,70 @@ pub async fn listen_account_update_callback(
                 continue;
             }
         };
-        if let Err(e) = tx.send(msg.clone()) {
+        if let Err(_e) = tx.send(resp.clone()) {
             subscription_manager.unsubscribe_all(&socket).await;
         }
+    }
+}
+
+pub mod rpc_handler {
+    use std::sync::Arc;
+
+    use crate::{rpc::{self, RpcResponse}, ws::{SocketId, WebsocketIncoming}};
+
+    use super::Manager;
+
+    pub async fn handle_subscriptions(
+        req: WebsocketIncoming,
+        subscription_manager: Arc<Manager>,
+        socket_id: SocketId,
+    ) -> RpcResponse {
+        match req.params[0].as_str().unwrap_or("").into() {
+            super::SubscriptionActions::Subscribe => {
+                let _ = subscription_manager
+                    .subscribe(&socket_id, req.params[1].as_str().unwrap_or("").into())
+                    .await;
+
+                rpc::generate_success_response(
+                    Some(req.id),
+                    serde_json::json!({
+                        "subscription_status": true,
+                        "account_id": req.params[1].as_str().unwrap_or(""),
+                    }),
+                )
+
+            }
+            super::SubscriptionActions::Unsubscribe => {
+                let status = subscription_manager
+                    .unsubscribe(&socket_id, req.params[1].as_str().unwrap_or("").into())
+                    .await;
+
+                rpc::generate_success_response(
+                    Some(req.id),
+                    serde_json::json!({
+                        "unsubscribe_status": status,
+                        "account_id": req.params[1].as_str().unwrap_or(""),
+                    }),
+                )
+
+            }
+        }
+
+    }
+
+    pub async fn get_all_subscriptions(
+        request: WebsocketIncoming,
+        subscription_manager: Arc<Manager>,
+    ) -> RpcResponse {
+
+        let subscriptions = subscription_manager
+            .get_all_subscriptions()
+            .await;
+        rpc::generate_success_response(
+            Some(request.id),
+            serde_json::json!({
+                "subscribed_accounts": subscriptions
+            }),
+        )
     }
 }

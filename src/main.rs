@@ -46,6 +46,7 @@ mod shardus_monitor;
 mod subscription;
 mod tls;
 mod ws;
+mod rpc;
 
 use std::collections::HashMap;
 use std::fs;

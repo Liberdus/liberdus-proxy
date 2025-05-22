@@ -161,6 +161,11 @@ where
                         }
                     }
                     Application::Debug => {
+                        if !config.debug {
+                            respond_with_notfound(&mut client_stream).await?;
+                            continue;
+                        }
+
                         let subscribed_accounts =
                             subscription_manager.get_all_subscriptions().await;
                         let body = serde_json::json!({
