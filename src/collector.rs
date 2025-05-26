@@ -399,7 +399,7 @@ where
         "Keep-Alive",
         format!("timeout={}", config.tcp_keepalive_time_sec).as_str(),
     );
-    http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+    // http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
 
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
