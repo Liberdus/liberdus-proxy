@@ -511,6 +511,9 @@
 <a href="#511" id="511">511</a>
 <a href="#512" id="512">512</a>
 <a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
@@ -641,7 +644,7 @@
                 <span class="kw">let </span>(_method, route) = get_route(<span class="kw-2">&amp;</span>req_buf).unwrap();
 
                 <span class="kw">match </span>get_application(route.as_str()) {
-                    Application::Collector =&gt; {
+                    Application::Monitor =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = shardus_monitor::proxy::handle_request(
                             req_buf,
                             route,
@@ -652,8 +655,9 @@
                         </span>{
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling collector api request: {}"</span>, e);
                         }
+                        <span class="kw">continue</span>;
                     }
-                    Application::Monitor =&gt; {
+                    Application::Collector =&gt; {
                         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) =
                             collector::handle_request(req_buf, <span class="kw-2">&amp;mut </span>client_stream, config.clone())
                                 .<span class="kw">await
@@ -672,6 +676,7 @@
                         </span>{
                             <span class="macro">eprintln!</span>(<span class="string">"Error handling validator request: {}"</span>, e);
                         }
+                        <span class="kw">continue</span>;
                     }
                     Application::Debug =&gt; {
                         <span class="kw">if </span>!config.debug {
@@ -689,6 +694,7 @@
                             serde_json::to_string(<span class="kw-2">&amp;</span>body).unwrap(),
                         )
                         .<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">continue</span>;
                     }
                 }
             }
