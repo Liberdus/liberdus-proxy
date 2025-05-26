@@ -128,7 +128,7 @@ where
                 let (_method, route) = get_route(&req_buf).unwrap();
 
                 match get_application(route.as_str()) {
-                    Application::Collector => {
+                    Application::Monitor => {
                         if let Err(e) = shardus_monitor::proxy::handle_request(
                             req_buf,
                             route,
@@ -139,8 +139,9 @@ where
                         {
                             eprintln!("Error handling collector api request: {}", e);
                         }
+                        continue;
                     }
-                    Application::Monitor => {
+                    Application::Collector => {
                         if let Err(e) =
                             collector::handle_request(req_buf, &mut client_stream, config.clone())
                                 .await
@@ -159,6 +160,7 @@ where
                         {
                             eprintln!("Error handling validator request: {}", e);
                         }
+                        continue;
                     }
                     Application::Debug => {
                         if !config.debug {
@@ -176,6 +178,7 @@ where
                             serde_json::to_string(&body).unwrap(),
                         )
                         .await?;
+                        continue;
                     }
                 }
             }
