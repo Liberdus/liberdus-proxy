@@ -815,9 +815,9 @@
         <span class="string">"Keep-Alive"</span>,
         <span class="macro">format!</span>(<span class="string">"timeout={}"</span>, config.tcp_keepalive_time_sec).as_str(),
     );
-    http::set_http_header(<span class="kw-2">&amp;mut </span>response_data, <span class="string">"Access-Control-Allow-Origin"</span>, <span class="string">"*"</span>);
+    <span class="comment">// http::set_http_header(&amp;mut response_data, "Access-Control-Allow-Origin", "*");
 
-    <span class="comment">// Relay the collected response to the client
+    // Relay the collected response to the client
     </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = client_stream.write_all(<span class="kw-2">&amp;</span>response_data).<span class="kw">await </span>{
         <span class="macro">eprintln!</span>(<span class="string">"Error relaying response to client: {}"</span>, e);
         http::respond_with_internal_error(client_stream).<span class="kw">await</span><span class="question-mark">?</span>;
