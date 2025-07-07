@@ -34,6 +34,8 @@ pub struct Config {
     pub shardus_monitor: ShardusMonitorProxyConfig,
 
     pub local_source: LocalSource,
+
+    pub notifier: NotifierConfig,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -68,6 +70,12 @@ pub struct LocalSource {
     pub collector_api_port: u16,
     pub collector_event_server_ip: String,
     pub collector_event_server_port: u16,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct NotifierConfig {
+    pub ip: String,
+    pub port: u16,
 }
 
 /// Load the configuration from the config json file

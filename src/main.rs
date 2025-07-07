@@ -38,6 +38,7 @@
 //! ```
 mod archivers;
 mod collector;
+mod notifier;
 mod config;
 mod crypto;
 mod http;
