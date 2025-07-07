@@ -15,7 +15,7 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use crate::{collector, config, liberdus, shardus_monitor, subscription, Stats};
+use crate::{collector, config, liberdus, notifier, shardus_monitor, subscription, Stats};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -25,6 +25,7 @@ use tokio_rustls::TlsAcceptor;
 enum Application {
     Validator,
     Collector,
+    Notifier,
     Monitor,
     Debug,
 }
@@ -34,6 +35,8 @@ fn get_application(route: &str) -> Application {
         Application::Monitor
     } else if collector::is_collector_route(route) {
         Application::Collector
+    } else if notifier::is_notifier_route(route) {
+        Application::Notifier
     } else if route.starts_with("/get_subscriptions") {
         Application::Debug
     } else {
@@ -137,7 +140,7 @@ where
                         )
                         .await
                         {
-                            eprintln!("Error handling collector api request: {}", e);
+                            eprintln!("Error handling monitor api request: {}", e);
                         }
                         continue;
                     }
@@ -147,6 +150,14 @@ where
                                 .await
                         {
                             eprintln!("Error handling collector request: {}", e);
+                        }
+                    }
+                    Application::Notifier => {
+                        if let Err(e) =
+                            notifier::handle_request(req_buf, &mut client_stream, config.clone())
+                                .await
+                        {
+                            eprintln!("Error handling notifier request: {}", e);
                         }
                     }
                     Application::Validator => {
@@ -460,13 +471,21 @@ pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
     let path = rl_parts.next().unwrap_or("");
     let version = rl_parts.next().unwrap_or("");
 
-    // If the path begins with "/collector", strip that segment.
+    // If the path begins with "/collector" or "/notifier", strip that segment.
     let new_path: Cow<str> = if let Some(stripped) = path.strip_prefix("/collector") {
         // ensure we still have a leading slash
         if stripped.is_empty() {
             Cow::Borrowed("/")
         } else {
             // e.g. "/collector/x/y" → "/x/y"
+            Cow::Owned(stripped.to_string())
+        }
+    } else if let Some(stripped) = path.strip_prefix("/notifier") {
+        // ensure we still have a leading slash
+        if stripped.is_empty() {
+            Cow::Borrowed("/")
+        } else {
+            // e.g. "/notifier/x/y" → "/x/y"
             Cow::Owned(stripped.to_string())
         }
     } else {
