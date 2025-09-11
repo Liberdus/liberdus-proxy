@@ -108,6 +108,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _configs.clone(),
     ));
 
+    // Start the rotation monitor for filtering synchronized nodes
+    lbd.start_rotation_monitor(Arc::clone(&lbd));
+
     let _archivers = Arc::clone(&arch_utils);
     let _liberdus = Arc::clone(&lbd);
 
@@ -124,6 +127,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ticker.tick().await;
             Arc::clone(&_archivers).discover().await;
             _liberdus.update_active_nodelist().await;
+            
+            // Print rotation stats periodically
+            let (total, with_info, suitable) = _liberdus.get_rotation_stats().await;
+            println!("\nRotation Stats - Total: {}, With Info: {}, Suitable: {}", 
+                     total, with_info, suitable);
         }
     });
 
