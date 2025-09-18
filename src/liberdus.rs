@@ -118,6 +118,30 @@ impl Liberdus {
                         }
                     }
 
+                    // Filter out top and bottom nodes from the join-ordered list
+                    // This helps avoid nodes that might be joining/leaving or unstable
+                    if self.config.node_filtering.enabled 
+                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering {
+                        
+                        let remove_bottom = self.config.node_filtering.remove_bottom_nodes;
+                        let remove_top = self.config.node_filtering.remove_top_nodes;
+                        
+                        // Remove bottom nodes first (affects indices less)
+                        let nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
+                        nodelist.truncate(nodes_to_keep);
+                        
+                        // Remove top nodes
+                        if remove_top > 0 && nodelist.len() > remove_top {
+                            nodelist.drain(0..remove_top);
+                        }
+                        
+                        println!("Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)", 
+                                 nodelist.len(), remove_top, remove_bottom);
+                    } else if self.config.node_filtering.enabled {
+                        println!("Warning: Nodelist too small ({} nodes), not filtering to avoid service disruption (min required: {})", 
+                                 nodelist.len(), self.config.node_filtering.min_nodes_for_filtering);
+                    }
+
                     {
                         let mut guard = self.active_nodelist.write().await;
                         *guard = nodelist;
