@@ -15,6 +15,12 @@
         "enabled":  true,
         "replacement_ip": "69.197.162.234"
     },
+    "node_filtering": {
+        "enabled": true,
+        "remove_top_nodes": 3,
+        "remove_bottom_nodes": 3,
+        "min_nodes_for_filtering": 6
+    },
     "shardus_monitor": {
         "enabled": true,
         "upstream_ip": "69.197.162.234",

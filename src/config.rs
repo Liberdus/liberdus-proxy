@@ -29,6 +29,9 @@ pub struct Config {
     /// Standalone network configuration
     pub standalone_network: StandaloneNetworkConfig,
 
+    /// Node filtering configuration for join-ordered lists
+    pub node_filtering: NodeFilteringConfig,
+
     pub tls: TLSConfig,
 
     pub shardus_monitor: ShardusMonitorProxyConfig,
@@ -46,6 +49,20 @@ pub struct Config {
 pub struct StandaloneNetworkConfig {
     pub replacement_ip: String,
     pub enabled: bool,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+/// Node filtering configuration for join-ordered node lists
+/// This helps avoid unstable nodes that are joining or leaving the network
+pub struct NodeFilteringConfig {
+    /// Whether to enable node filtering based on join order
+    pub enabled: bool,
+    /// Number of nodes to remove from the top of the join-ordered list
+    pub remove_top_nodes: usize,
+    /// Number of nodes to remove from the bottom of the join-ordered list
+    pub remove_bottom_nodes: usize,
+    /// Minimum number of nodes required before filtering is applied
+    pub min_nodes_for_filtering: usize,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
