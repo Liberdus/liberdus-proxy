@@ -19,6 +19,7 @@ use tokio::{net::TcpStream, sync::RwLock, time::timeout};
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[allow(non_snake_case)]
 pub struct Consensor {
+    pub foundationNode: Option<bool>,
     pub id: String,
     pub ip: String,
     pub port: u16,
@@ -79,6 +80,8 @@ impl Liberdus {
                 "http://{}:{}/full-nodelist?activeOnly=true",
                 archiver.ip, archiver.port
             );
+            // print url
+            println!("Fetching nodelist from archiver: {}", url);
             let collected_nodelist = match reqwest::get(&url).await {
                 Ok(resp) => {
                     let body: Result<SignedNodeListResp, _> =
@@ -91,6 +94,7 @@ impl Liberdus {
                             if self.verify_signature(&body) {
                                 Ok(body.nodeList)
                             } else {
+                                println!("Warning: Invalid signature from archiver {}", archiver.ip);
                                 Err(std::io::Error::new(
                                     std::io::ErrorKind::InvalidData,
                                     "Invalid signature",
@@ -436,6 +440,10 @@ impl Liberdus {
     }
 
     fn verify_signature(&self, signed_payload: &SignedNodeListResp) -> bool {
+        println!(
+            "Verifying signature from owner: {}",
+            signed_payload.sign.owner
+        );
         let unsigned_msg = serde_json::json!({
             "nodeList": signed_payload.nodeList,
         });
@@ -595,6 +603,7 @@ mod tests {
                 ip: "0.0.0.0".to_string(),
                 port: i,
                 rng_bias: None,
+                foundationNode: None,
             };
             nodes.push(node);
         }
@@ -633,6 +642,40 @@ mod tests {
             println!("{}", index);
             assert_eq!(true, true);
         }
+    }
+
+    #[tokio::test]
+    async fn test_verify_signature() {
+        // Load test configuration
+        let config = config::Config::load().unwrap();
+        
+        // Create mock archiver
+        let mock_archiver = archivers::Archiver {
+            ip: "0.0.0.0".to_string(),
+            port: 0,
+            publicKey: "0x0".to_string(),
+        };
+        let archivers = Arc::new(RwLock::new(vec![mock_archiver]));
+
+        // Create Liberdus instance with the crypto module using crypto_seed from config
+        let liberdus = Liberdus::new(
+            Arc::new(crypto::ShardusCrypto::new(&config.crypto_seed)),
+            archivers,
+            config,
+        );
+
+        // Read the test nodelist JSON file
+        let test_file_content = std::fs::read_to_string("test_nodelist.json")
+            .expect("Failed to read test_nodelist.json file");
+        
+        // Parse the JSON into SignedNodeListResp
+        let signed_payload: SignedNodeListResp = serde_json::from_str(&test_file_content)
+            .expect("Failed to parse test_nodelist.json");
+
+        // Verify the signature - this should return true
+        let result = liberdus.verify_signature(&signed_payload);
+        
+        assert!(result, "Signature verification should return true for valid test data");
     }
 }
 
@@ -695,22 +738,32 @@ where
     // Forward the client's request to the server
     let now = std::time::Instant::now();
     let mut response_data = vec![];
+    
+    println!("Forwarding request to backend node: {}:{}", target_server.ip, target_server.port);
+    let forward_start = std::time::Instant::now();
+    
     match timeout(
         Duration::from_millis(config.max_http_timeout_ms as u64),
         server_stream.write_all(&request_buffer),
     )
     .await
     {
-        Ok(Ok(())) => match http::collect_http(&mut server_stream, &mut response_data).await {
-            Ok(()) => {
+        Ok(Ok(())) => match timeout(
+            Duration::from_millis(config.max_http_timeout_ms as u64),
+            http::collect_http(&mut server_stream, &mut response_data)
+        ).await {
+            Ok(Ok(())) => {
+                let forward_time = forward_start.elapsed();
                 let elapsed = now.elapsed();
+                println!("Backend response received in: {}ms (forward: {}ms)", 
+                        elapsed.as_millis(), forward_time.as_millis());
                 liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
                 tokio::spawn(async move {
                     server_stream.shutdown().await.unwrap();
                     drop(server_stream);
                 });
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 eprintln!("Error reading response from server: {}", e);
                 http::respond_with_internal_error(client_stream).await?;
                 liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
@@ -719,6 +772,16 @@ where
                     drop(server_stream);
                 });
                 return Err(Box::new(e));
+            }
+            Err(_) => {
+                eprintln!("Timeout reading response from server.");
+                http::respond_with_timeout(client_stream).await?;
+                liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
+                tokio::spawn(async move {
+                    server_stream.shutdown().await.unwrap();
+                    drop(server_stream);
+                });
+                return Err("Timeout reading response from server".into());
             }
         },
         Ok(Err(e)) => {
