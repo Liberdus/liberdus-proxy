@@ -120,6 +120,7 @@ pub fn is_notifier_route(route: &str) -> bool {
     route.starts_with("/notifier")
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;

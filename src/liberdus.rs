@@ -84,6 +84,8 @@ impl Liberdus {
                 "http://{}:{}/full-nodelist?activeOnly=true",
                 archiver.ip, archiver.port
             );
+            // print url
+            println!("Fetching nodelist from archiver: {}", url);
             let collected_nodelist = match reqwest::get(&url).await {
                 Ok(resp) => {
                     let body: Result<SignedNodeListResp, _> =
@@ -96,6 +98,7 @@ impl Liberdus {
                             if self.verify_signature(&body) {
                                 Ok(body.nodeList)
                             } else {
+                                println!("Warning: Invalid signature from archiver {}", archiver.ip);
                                 Err(std::io::Error::new(
                                     std::io::ErrorKind::InvalidData,
                                     "Invalid signature",
@@ -452,6 +455,10 @@ impl Liberdus {
     }
 
     fn verify_signature(&self, signed_payload: &SignedNodeListResp) -> bool {
+        println!(
+            "Verifying signature from owner: {}",
+            signed_payload.sign.owner
+        );
         let unsigned_msg = serde_json::json!({
             "nodeList": signed_payload.nodeList,
         });
@@ -709,6 +716,7 @@ mod tests {
                 ip: "0.0.0.0".to_string(),
                 port: i,
                 rng_bias: None,
+                foundationNode: None,
             };
             nodes.push(node);
         }
@@ -748,7 +756,6 @@ mod tests {
             assert_eq!(true, true);
         }
     }
-
     fn sample_config() -> config::Config {
         config::Config {
             http_port: 0,
