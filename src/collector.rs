@@ -319,14 +319,18 @@ where
         config.local_source.collector_api_ip.clone(),
         config.local_source.collector_api_port.clone()
     );
+    eprintln!("Collector forwarding: Connecting to {}", ip_port);
 
     let mut server_stream = match timeout(
         Duration::from_millis(config.max_http_timeout_ms as u64),
-        TcpStream::connect(ip_port),
+        TcpStream::connect(ip_port.clone()),
     )
     .await
     {
-        Ok(Ok(stream)) => stream,
+        Ok(Ok(stream)) => {
+            eprintln!("Collector forwarding: Connected to {} successfully", ip_port);
+            stream
+        }
         Ok(Err(e)) => {
             eprintln!("Error connecting to collector api server: {}", e);
             http::respond_with_timeout(client_stream).await?;
@@ -341,27 +345,41 @@ where
 
     // Forward the client's request to the server
     let mut response_data = vec![];
+    if let Ok(request_str) = std::str::from_utf8(&request_buffer) {
+        if let Some(first_line) = request_str.lines().next() {
+            eprintln!("Collector forwarding: Sending request: {}", first_line);
+        }
+    }
     match timeout(
         Duration::from_millis(config.max_http_timeout_ms as u64),
         server_stream.write_all(&request_buffer),
     )
     .await
     {
-        Ok(Ok(())) => match http::collect_http(&mut server_stream, &mut response_data).await {
-            Ok(()) => {
-                tokio::spawn(async move {
-                    server_stream.shutdown().await.unwrap();
-                    drop(server_stream);
-                });
-            }
-            Err(e) => {
-                eprintln!("Error reading response from collector api server: {}", e);
-                http::respond_with_internal_error(client_stream).await?;
-                tokio::spawn(async move {
-                    server_stream.shutdown().await.unwrap();
-                    drop(server_stream);
-                });
-                return Err(Box::new(e));
+        Ok(Ok(())) => {
+            eprintln!("Collector forwarding: Request sent, collecting response");
+            match http::collect_http(&mut server_stream, &mut response_data).await {
+                Ok(()) => {
+                    eprintln!("Collector forwarding: Response collected, length: {}", response_data.len());
+                    if let Ok(response_str) = std::str::from_utf8(&response_data) {
+                        if let Some(first_line) = response_str.lines().next() {
+                            eprintln!("Collector forwarding: Response status: {}", first_line);
+                        }
+                    }
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Error reading response from collector api server: {}", e);
+                    http::respond_with_internal_error(client_stream).await?;
+                    tokio::spawn(async move {
+                        server_stream.shutdown().await.unwrap();
+                        drop(server_stream);
+                    });
+                    return Err(Box::new(e));
+                }
             }
         },
         Ok(Err(e)) => {
@@ -383,7 +401,7 @@ where
             return Err("Timeout forwarding request to collector api server".into());
         }
     }
-    println!("Successfully forwarded request to collector api server.");
+    println!("Collector forwarding: Successfully forwarded request to collector api server at {}", ip_port);
 
     drop(request_buffer);
 
@@ -402,6 +420,7 @@ where
     // http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
 
     // Relay the collected response to the client
+    eprintln!("Collector forwarding: Relaying response to client");
     if let Err(e) = client_stream.write_all(&response_data).await {
         eprintln!("Error relaying response to client: {}", e);
         http::respond_with_internal_error(client_stream).await?;
