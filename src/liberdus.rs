@@ -88,18 +88,19 @@ impl Liberdus {
                         serde_json::from_str(&resp.text().await.unwrap());
                     match body {
                         Ok(body) => {
-                            //important that serde doesn't populate default value for
-                            // Consensor::trip_ms
-                            // it'll taint the signature payload
-                            if self.verify_signature(&body) {
-                                Ok(body.nodeList)
-                            } else {
-                                println!("Warning: Invalid signature from archiver {}", archiver.ip);
-                                Err(std::io::Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    "Invalid signature",
-                                ))
-                            }
+                            Ok(body.nodeList)
+                            // //important that serde doesn't populate default value for
+                            // // Consensor::trip_ms
+                            // // it'll taint the signature payload
+                            // if self.verify_signature(&body) {
+                            //     Ok(body.nodeList)
+                            // } else {
+                            //     println!("Warning: Invalid signature from archiver {}", archiver.ip);
+                            //     Err(std::io::Error::new(
+                            //         std::io::ErrorKind::InvalidData,
+                            //         "Invalid signature",
+                            //     ))
+                            // }
                         }
                         Err(e) => Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
