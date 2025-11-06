@@ -9,6 +9,18 @@ use tokio::sync::{Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
 use tokio_tungstenite::tungstenite::protocol::Message;
 
+/// Get current timestamp for logging
+fn get_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    
+    // Format as human-readable timestamp (you can adjust format as needed)
+    format!("{}", now)
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum Methods {
     ChatEvent,
@@ -100,7 +112,7 @@ pub async fn listen(
 
     loop {
         // let throttler = Arc::clone(&semaphore);
-        let (raw_stream, _) = match listener.accept().await {
+        let (raw_stream, socket_addr) = match listener.accept().await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -133,7 +145,8 @@ pub async fn listen(
                 Some(tls_acceptor) => match tls_acceptor.accept(raw_stream).await {
                     Ok(tls_stream) => {
                         let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
-                        let e = handle_stream(tls_stream, sock_map, subscription_manager).await;
+                        let client_addr = format!("{}", socket_addr);
+                        let e = handle_stream(tls_stream, sock_map, subscription_manager, client_addr).await;
                         if let Err(e) = e {
                             eprintln!("Handle Stream Error: {:?}", e);
                         }
@@ -147,7 +160,8 @@ pub async fn listen(
                     }
                 },
                 None => {
-                    let e = handle_stream(raw_stream, sock_map, subscription_manager).await;
+                    let client_addr = format!("{}", socket_addr);
+                    let e = handle_stream(raw_stream, sock_map, subscription_manager, client_addr).await;
                     if let Err(e) = e {
                         eprintln!("Handle Stream Error: {}", e);
                     }
@@ -165,12 +179,16 @@ async fn handle_stream<StreamLike>(
     stream: StreamLike,
     sock_map: SocketIdents,
     subscription_manager: Arc<subscription::Manager>,
+    client_addr: String,
 ) -> Result<(), std::io::Error>
 where
     StreamLike: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
     let socket_id = generate_uuid();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<rpc::RpcResponse>();
+    
+    println!("[{}] [WS_CONNECT] IP: {} | Socket ID: {}", get_timestamp(), client_addr, socket_id);
+    
     let ws_stream = match tokio_tungstenite::accept_async(stream).await {
         Ok(ws_stream) => {
             {
@@ -194,6 +212,7 @@ where
 
     let id = socket_id.clone();
     let subscription_manager_long_lived = Arc::clone(&subscription_manager);
+    let client_addr_clone = client_addr.clone();
 
     let last_pong = Arc::new(AtomicU64::new(
         SystemTime::now()
@@ -204,11 +223,13 @@ where
 
     let last_pong_1 = Arc::clone(&last_pong);
     let socket_id_1 = socket_id.clone();
+    let client_addr_1 = client_addr_clone.clone();
     tokio::spawn(async move {
         while let Some(msg) = read.next().await {
             match msg {
                 Ok(msg) => match msg {
                     Message::Close(_) => {
+                        println!("[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Client closed connection", get_timestamp(), client_addr_1, socket_id_1);
                         let mut guard = sock_map.write().await;
                         guard.remove(&socket_id_1);
                         subscription_manager_long_lived
@@ -221,6 +242,7 @@ where
                         let parsed: WebsocketIncoming = match serde_json::from_str(&msg) {
                             Ok(p) => p,
                             Err(e) => {
+                                eprintln!("[{}] [WS_ERROR] IP: {} | Socket ID: {} | Invalid JSON: {}", get_timestamp(), client_addr_1, socket_id_1, e);
                                 let resp = rpc::generate_error_response(
                                     None,
                                     format!("Invalid JSON: {}", e),
@@ -231,6 +253,9 @@ where
                             }
                         };
 
+                        println!("[{}] [WS_MESSAGE] IP: {} | Socket ID: {} | Method: {:?} | ID: {:?}", 
+                                get_timestamp(), client_addr_1, socket_id_1, parsed.method, parsed.id);
+
                         let rpc_id = parsed.id.clone();
                         let e = rpc::handle(
                             parsed,
@@ -240,7 +265,8 @@ where
                         )
                         .await;
                         if let Err(e) = e {
-                            eprintln!("Error handling request: {}", e);
+                            eprintln!("[{}] [WS_RPC_ERROR] IP: {} | Socket ID: {} | Error handling request: {}", 
+                                     get_timestamp(), client_addr_1, socket_id_1, e);
                             let resp = rpc::generate_error_response(
                                 Some(rpc_id),
                                 format!("Error handling request: {}", e),
@@ -250,7 +276,7 @@ where
                         }
                     }
                     Message::Pong(_) => {
-                        println!("Pong received, socket id {:?}", socket_id_1);
+                        println!("[{}] [WS_PONG] IP: {} | Socket ID: {}", get_timestamp(), client_addr_1, socket_id_1);
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
@@ -262,7 +288,9 @@ where
                     }
                 },
                 Err(e) => {
+                    eprintln!("[{}] [WS_ERROR] IP: {} | Socket ID: {} | WebSocket error: {}", get_timestamp(), client_addr_1, socket_id_1, e);
                     if e.to_string().contains("Connection reset by peer") {
+                        println!("[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Connection reset by peer", get_timestamp(), client_addr_1, socket_id_1);
                         break;
                     }
                 }
@@ -284,6 +312,7 @@ where
                 .as_secs()
                 .saturating_sub(last);
             if elapsed > heartbeat_interval_sec {
+                println!("[{}] [WS_TIMEOUT] Socket ID: {} | Closing due to heartbeat timeout ({}s elapsed)", get_timestamp(), socket_id, elapsed);
                 subscription_manager.unsubscribe_all(&socket_id).await;
                 let mut guard = write_half_for_ping_pong.lock().await;
                 let _ = guard.close().await;

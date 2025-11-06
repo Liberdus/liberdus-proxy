@@ -22,6 +22,18 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 use tokio_rustls::TlsAcceptor;
 
+/// Get current timestamp for logging
+fn get_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    
+    // Format as human-readable timestamp (you can adjust format as needed)
+    format!("{}", now)
+}
+
 enum Application {
     Validator,
     Collector,
@@ -115,10 +127,13 @@ pub async fn handle_stream<StreamLike>(
     liberdus: Arc<liberdus::Liberdus>,
     subscription_manager: Arc<subscription::Manager>,
     config: Arc<config::Config>,
+    client_addr: String,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     StreamLike: AsyncWrite + AsyncRead + Unpin + Send,
 {
+    println!("[{}] [HTTP_CONNECT] IP: {} | New connection established", get_timestamp(), client_addr);
+    
     loop {
         let mut req_buf = Vec::new();
         match timeout(
@@ -128,7 +143,45 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let (_method, route) = get_route(&req_buf).unwrap();
+                // Check for empty requests
+                if req_buf.is_empty() {
+                    eprintln!("[{}] [HTTP_ERROR] IP: {} | Received empty request", get_timestamp(), client_addr);
+                    break;
+                }
+                
+                // Log that we received data
+                println!("[{}] [HTTP_DATA] IP: {} | Received {} bytes", get_timestamp(), client_addr, req_buf.len());
+                
+                // Log warning for unusually large requests
+                if req_buf.len() > 100_000 {
+                    eprintln!("[{}] [HTTP_WARNING] IP: {} | Large request received: {} bytes", get_timestamp(), client_addr, req_buf.len());
+                }
+                
+                let method_route = match get_route(&req_buf) {
+                    Some(route_info) => route_info,
+                    None => {
+                        eprintln!("[{}] [HTTP_ERROR] IP: {} | Failed to extract route from request", get_timestamp(), client_addr);
+                        // Log the first 200 bytes of the request for debugging
+                        if let Ok(req_str) = std::str::from_utf8(&req_buf) {
+                            let preview = if req_str.len() > 200 { &req_str[..200] } else { req_str };
+                            eprintln!("[{}] [HTTP_DEBUG] IP: {} | Request preview: {:?}", get_timestamp(), client_addr, preview);
+                        }
+                        break;
+                    }
+                };
+                
+                let (_method, route) = method_route;
+                
+                // Extract client information for logging
+                let user_agent = extract_user_agent(&req_buf);
+                let client_ip = extract_client_ip(&req_buf, &client_addr);
+                let (platform, app_version, device_id) = extract_client_info(&req_buf);
+                
+                // Log successful request
+                println!(
+                    "[{}] [REQUEST] IP: {} | Route: {} {} | UA: {} | Platform: {} | AppVer: {} | DeviceID: {}",
+                    get_timestamp(), client_ip, _method, route, user_agent, platform, app_version, device_id
+                );
 
                 match get_application(route.as_str()) {
                     Application::Monitor => {
@@ -194,16 +247,31 @@ where
                 }
             }
             Ok(Err(e)) => {
-                eprintln!("Error attempting to read bytes out of client stream: {}", e);
+                let error_details = match e.kind() {
+                    std::io::ErrorKind::UnexpectedEof => "Unexpected EOF - client disconnected abruptly",
+                    std::io::ErrorKind::ConnectionReset => "Connection reset by peer",
+                    std::io::ErrorKind::ConnectionAborted => "Connection aborted",
+                    std::io::ErrorKind::TimedOut => "Read operation timed out",
+                    _ => "Unknown IO error"
+                };
+                eprintln!(
+                    "[{}] [STREAM_ERROR] IP: {} | Error attempting to read bytes out of client stream: {} (Kind: {:?}, Details: {})",
+                    get_timestamp(), client_addr, e, e.kind(), error_details
+                );
                 break;
             }
             Err(_) => {
-                eprintln!("Shutting down Stream due to inactivity beyond keepalive time.");
+                eprintln!(
+                    "[{}] [TIMEOUT] IP: {} | Shutting down Stream due to inactivity beyond keepalive time ({}s).",
+                    get_timestamp(), client_addr, config.tcp_keepalive_time_sec
+                );
                 break;
             }
         }
     }
 
+    println!("[{}] [HTTP_DISCONNECT] IP: {} | Connection closed", get_timestamp(), client_addr);
+    
     match client_stream.shutdown().await {
         Ok(_) => Ok(()),
         Err(_e) => Ok(()),
@@ -342,6 +410,59 @@ pub fn get_route(buffer: &[u8]) -> Option<(String, String)> {
         _ => None,
     }
 }
+
+/// Extract User-Agent from HTTP headers
+pub fn extract_user_agent(buffer: &[u8]) -> String {
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        for line in buffer_str.lines() {
+            if line.to_lowercase().starts_with("user-agent:") {
+                return line[11..].trim().to_string();
+            }
+        }
+    }
+    "Unknown".to_string()
+}
+
+/// Extract X-Forwarded-For or real client IP from headers
+pub fn extract_client_ip(buffer: &[u8], peer_addr: &str) -> String {
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        for line in buffer_str.lines() {
+            let line_lower = line.to_lowercase();
+            if line_lower.starts_with("x-forwarded-for:") {
+                let forwarded_ips = line[16..].trim();
+                // Take the first IP (original client) from comma-separated list
+                if let Some(first_ip) = forwarded_ips.split(',').next() {
+                    return first_ip.trim().to_string();
+                }
+            } else if line_lower.starts_with("x-real-ip:") {
+                return line[10..].trim().to_string();
+            }
+        }
+    }
+    peer_addr.to_string()
+}
+
+/// Extract additional client info from headers
+pub fn extract_client_info(buffer: &[u8]) -> (String, String, String) {
+    let mut platform = "Unknown".to_string();
+    let mut app_version = "Unknown".to_string();
+    let mut device_id = "Unknown".to_string();
+    
+    if let Ok(buffer_str) = std::str::from_utf8(buffer) {
+        for line in buffer_str.lines() {
+            let line_lower = line.to_lowercase();
+            if line_lower.starts_with("x-platform:") {
+                platform = line[11..].trim().to_string();
+            } else if line_lower.starts_with("x-app-version:") {
+                app_version = line[14..].trim().to_string();
+            } else if line_lower.starts_with("x-device-id:") {
+                device_id = line[12..].trim().to_string();
+            }
+        }
+    }
+    
+    (platform, app_version, device_id)
+}
 pub async fn listen(
     liberdus: Arc<liberdus::Liberdus>,
     subscription_manager: Arc<subscription::Manager>,
@@ -369,7 +490,7 @@ pub async fn listen(
     );
 
     loop {
-        let (raw_stream, _) = match listener.accept().await {
+        let (raw_stream, socket_addr) = match listener.accept().await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -396,8 +517,9 @@ pub async fn listen(
                 Some(tls_acceptor) => match tls_acceptor.accept(raw_stream).await {
                     Ok(tls_stream) => {
                         let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
+                        let client_addr = format!("{}", socket_addr);
                         let e =
-                            handle_stream(tls_stream, liberdus, subscription_manager, config).await;
+                            handle_stream(tls_stream, liberdus, subscription_manager, config, client_addr).await;
                         if let Err(e) = e {
                             eprintln!("Handle Stream Error: {}", e);
                         }
@@ -411,7 +533,8 @@ pub async fn listen(
                     }
                 },
                 None => {
-                    let e = handle_stream(raw_stream, liberdus, subscription_manager, config).await;
+                    let client_addr = format!("{}", socket_addr);
+                    let e = handle_stream(raw_stream, liberdus, subscription_manager, config, client_addr).await;
                     if let Err(e) = e {
                         eprintln!("Handle Stream Error: {}", e);
                     }
