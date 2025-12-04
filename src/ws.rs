@@ -1,4 +1,4 @@
-use crate::{collector, rpc, subscription};
+use crate::{rpc, subscription};
 use crate::{config, liberdus, Stats};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -63,7 +63,7 @@ fn generate_uuid() -> String {
 }
 
 pub async fn listen(
-    liberdus: Arc<liberdus::Liberdus>,
+    _liberdus: Arc<liberdus::Liberdus>,
     subscription_manager: Arc<subscription::Manager>,
     sock_map: Arc<RwLock<HashMap<SocketId, UnboundedSender<rpc::RpcResponse>>>>,
     config: Arc<config::Config>,
@@ -113,7 +113,6 @@ pub async fn listen(
         //     continue;
         // }
 
-        let liberdus = Arc::clone(&liberdus);
         let config = Arc::clone(&config);
         let stats = Arc::clone(&server_stats);
         let tls_acceptor = match tls_acceptor.is_some() && config.tls.enabled {

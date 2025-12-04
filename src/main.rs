@@ -55,10 +55,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsAcceptor;
-
-struct Stats {
-    pub stream_count: Arc<AtomicUsize>,
-}
+use liberdus_proxy::Stats;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

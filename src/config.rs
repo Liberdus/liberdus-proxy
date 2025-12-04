@@ -108,3 +108,17 @@ impl Config {
             .map_err(|err| format!("Failed to parse config file: {}", err))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_reads_default_config() {
+        let cfg = Config::load().expect("config should parse");
+        assert_eq!(cfg.http_port, 3030);
+        assert!(cfg.debug);
+        assert_eq!(cfg.tls.enabled, false);
+        assert_eq!(cfg.node_filtering.remove_top_nodes, 3);
+    }
+}
