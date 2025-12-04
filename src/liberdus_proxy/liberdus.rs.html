@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/liberdus.rs`."><title>liberdus.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0 (f6e511eec 2024-10-15)" data-channel="1.82.0" data-search-js="search-a99f1315e7cc5121.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-921df33f47b8780c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/liberdus.rs`."><title>liberdus.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b0742ba02757f159.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.83.0 (90b35a623 2024-11-26)" data-channel="1.83.0" data-search-js="search-f0d225181b97f9a4.js" data-settings-js="settings-805db61a62df4bd2.js" ><script src="../../static.files/storage-1d39b6787ed640ff.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-f070b9041d14864c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-0111fcff984fae8f.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">liberdus_proxy/</div>liberdus.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -762,7 +763,187 @@
 <a href="#762" id="762">762</a>
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
-</pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
 </span><span class="kw">use </span><span class="kw">crate</span>::crypto;
 <span class="kw">use crate</span>::{archivers, collector, config, http};
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
@@ -880,6 +1061,30 @@
                         <span class="kw">for </span>node <span class="kw">in </span>nodelist.iter_mut() {
                             node.ip = replacement_ip.clone();
                         }
+                    }
+
+                    <span class="comment">// Filter out top and bottom nodes from the join-ordered list
+                    // This helps avoid nodes that might be joining/leaving or unstable
+                    </span><span class="kw">if </span><span class="self">self</span>.config.node_filtering.enabled 
+                        &amp;&amp; nodelist.len() &gt; <span class="self">self</span>.config.node_filtering.min_nodes_for_filtering {
+                        
+                        <span class="kw">let </span>remove_bottom = <span class="self">self</span>.config.node_filtering.remove_bottom_nodes;
+                        <span class="kw">let </span>remove_top = <span class="self">self</span>.config.node_filtering.remove_top_nodes;
+                        
+                        <span class="comment">// Remove bottom nodes first (affects indices less)
+                        </span><span class="kw">let </span>nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
+                        nodelist.truncate(nodes_to_keep);
+                        
+                        <span class="comment">// Remove top nodes
+                        </span><span class="kw">if </span>remove_top &gt; <span class="number">0 </span>&amp;&amp; nodelist.len() &gt; remove_top {
+                            nodelist.drain(<span class="number">0</span>..remove_top);
+                        }
+                        
+                        <span class="macro">println!</span>(<span class="string">"Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)"</span>, 
+                                 nodelist.len(), remove_top, remove_bottom);
+                    } <span class="kw">else if </span><span class="self">self</span>.config.node_filtering.enabled {
+                        <span class="macro">println!</span>(<span class="string">"Warning: Nodelist too small ({} nodes), not filtering to avoid service disruption (min required: {})"</span>, 
+                                 nodelist.len(), <span class="self">self</span>.config.node_filtering.min_nodes_for_filtering);
                     }
 
                     {
@@ -1306,6 +1511,8 @@
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>tokio::sync::RwLock;
 
     <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>, worker_threads = <span class="number">1</span>)]
     </span><span class="kw">async fn </span>test_weighted_random() {
@@ -1373,6 +1580,160 @@
             <span class="macro">println!</span>(<span class="string">"{}"</span>, index);
             <span class="macro">assert_eq!</span>(<span class="bool-val">true</span>, <span class="bool-val">true</span>);
         }
+    }
+
+    <span class="kw">fn </span>sample_config() -&gt; config::Config {
+        config::Config {
+            http_port: <span class="number">0</span>,
+            crypto_seed:
+                <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>.into(),
+            archiver_seed_path: String::new(),
+            nodelist_refresh_interval_sec: <span class="number">1</span>,
+            debug: <span class="bool-val">false</span>,
+            max_http_timeout_ms: <span class="number">1_000</span>,
+            tcp_keepalive_time_sec: <span class="number">1</span>,
+            standalone_network: config::StandaloneNetworkConfig {
+                replacement_ip: <span class="string">"127.0.0.1"</span>.into(),
+                enabled: <span class="bool-val">false</span>,
+            },
+            node_filtering: config::NodeFilteringConfig {
+                enabled: <span class="bool-val">false</span>,
+                remove_top_nodes: <span class="number">0</span>,
+                remove_bottom_nodes: <span class="number">0</span>,
+                min_nodes_for_filtering: <span class="number">0</span>,
+            },
+            tls: config::TLSConfig {
+                enabled: <span class="bool-val">false</span>,
+                cert_path: String::new(),
+                key_path: String::new(),
+            },
+            shardus_monitor: config::ShardusMonitorProxyConfig {
+                enabled: <span class="bool-val">false</span>,
+                upstream_ip: String::new(),
+                upstream_port: <span class="number">0</span>,
+                https: <span class="bool-val">false</span>,
+            },
+            local_source: config::LocalSource {
+                collector_api_ip: String::new(),
+                collector_api_port: <span class="number">0</span>,
+                collector_event_server_ip: String::new(),
+                collector_event_server_port: <span class="number">0</span>,
+            },
+            notifier: config::NotifierConfig {
+                ip: String::new(),
+                port: <span class="number">0</span>,
+            },
+        }
+    }
+
+    <span class="kw">fn </span>sample_liberdus() -&gt; Liberdus {
+        <span class="kw">let </span>crypto = Arc::new(crypto::ShardusCrypto::new(
+            <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>,
+        ));
+        Liberdus::new(
+            crypto,
+            Arc::new(RwLock::new(Vec::new())),
+            sample_config(),
+        )
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>calculate_bias_maps_timeouts() {
+        <span class="kw">let </span>l = sample_liberdus();
+        <span class="macro">assert!</span>((l.calculate_bias(<span class="number">0</span>, <span class="number">1000</span>) - <span class="number">1.0</span>).abs() &lt; f64::EPSILON);
+        <span class="macro">assert!</span>(l.calculate_bias(<span class="number">1000</span>, <span class="number">1000</span>) &lt; <span class="number">0.01</span>);
+        <span class="macro">assert_eq!</span>(l.calculate_bias(<span class="number">10</span>, <span class="number">1</span>), <span class="number">1.0</span>);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>prepare_list_sorts_nodes_by_rtt() {
+        <span class="kw">let </span>liberdus = sample_liberdus();
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
+                id: <span class="string">"slow"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
+                port: <span class="number">80</span>,
+                publicKey: <span class="string">"pk1"</span>.into(),
+                rng_bias: <span class="prelude-val">None</span>,
+            });
+            nodes.push(Consensor {
+                id: <span class="string">"fast"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
+                port: <span class="number">80</span>,
+                publicKey: <span class="string">"pk2"</span>.into(),
+                rng_bias: <span class="prelude-val">None</span>,
+            });
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>trips = liberdus.trip_ms.write().<span class="kw">await</span>;
+            trips.insert(<span class="string">"slow"</span>.into(), <span class="number">900</span>);
+            trips.insert(<span class="string">"fast"</span>.into(), <span class="number">10</span>);
+        }
+
+        liberdus.prepare_list().<span class="kw">await</span>;
+
+        <span class="kw">let </span>ordered = liberdus.active_nodelist.read().<span class="kw">await</span>.clone();
+        <span class="macro">assert_eq!</span>(ordered[<span class="number">0</span>].id, <span class="string">"fast"</span>);
+        <span class="macro">assert!</span>(ordered[<span class="number">0</span>].rng_bias.unwrap() &gt; ordered[<span class="number">1</span>].rng_bias.unwrap());
+
+        <span class="kw">let </span>dist = liberdus
+            .load_distribution_commulative_bias
+            .read()
+            .<span class="kw">await
+            </span>.clone();
+        <span class="macro">assert_eq!</span>(dist.len(), <span class="number">2</span>);
+        <span class="macro">assert!</span>(liberdus
+            .list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>get_next_round_robins_then_bias() {
+        <span class="kw">let </span>liberdus = sample_liberdus();
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
+                id: <span class="string">"one"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
+                port: <span class="number">80</span>,
+                publicKey: <span class="string">"pk1"</span>.into(),
+                rng_bias: <span class="prelude-val">None</span>,
+            });
+            nodes.push(Consensor {
+                id: <span class="string">"two"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
+                port: <span class="number">80</span>,
+                publicKey: <span class="string">"pk2"</span>.into(),
+                rng_bias: <span class="prelude-val">None</span>,
+            });
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>trips = liberdus.trip_ms.write().<span class="kw">await</span>;
+            trips.insert(<span class="string">"one"</span>.into(), <span class="number">50</span>);
+            trips.insert(<span class="string">"two"</span>.into(), <span class="number">10</span>);
+        }
+
+        <span class="kw">let </span>first = liberdus.get_next_appropriate_consensor().<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>second = liberdus.get_next_appropriate_consensor().<span class="kw">await</span>.unwrap();
+        <span class="macro">assert_eq!</span>(first.<span class="number">0</span>, <span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(second.<span class="number">0</span>, <span class="number">1</span>);
+
+        <span class="kw">let _ </span>= liberdus.get_next_appropriate_consensor().<span class="kw">await</span>.unwrap();
+        <span class="macro">assert!</span>(liberdus
+            .list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>old_receipt_route_variants() {
+        <span class="macro">assert_eq!</span>(
+            is_old_receipt_route(<span class="string">"/old_receipt/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"</span>),
+            <span class="prelude-val">Some</span>(<span class="string">"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"</span>.into())
+        );
+        <span class="macro">assert_eq!</span>(is_old_receipt_route(<span class="string">"/wrong/abcd"</span>), <span class="prelude-val">None</span>);
     }
 }
 
@@ -1518,7 +1879,7 @@
 
     <span class="kw">match </span>(parts.next(), parts.next(), parts.next()) {
         <span class="comment">// first segment,   second segment,    make sure there’s no 3rd segment
-        </span>(<span class="prelude-val">Some</span>(seg @ <span class="string">"old_receipt"</span>) | <span class="prelude-val">Some</span>(seg @ <span class="string">"oldreceipt"</span>), <span class="prelude-val">Some</span>(hash), <span class="prelude-val">None</span>)
+        </span>(<span class="prelude-val">Some</span>(_seg @ <span class="string">"old_receipt"</span>) | <span class="prelude-val">Some</span>(_seg @ <span class="string">"oldreceipt"</span>), <span class="prelude-val">Some</span>(hash), <span class="prelude-val">None</span>)
             <span class="kw">if </span>hash.len() == <span class="number">64 </span>&amp;&amp; hash.chars().all(|c| c.is_ascii_hexdigit()) =&gt;
         {
             <span class="prelude-val">Some</span>(hash.to_owned())
@@ -1526,4 +1887,5 @@
         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
     }
 }
+
 </code></pre></div></section></main></body></html>

@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/config.rs`."><title>config.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0 (f6e511eec 2024-10-15)" data-channel="1.82.0" data-search-js="search-a99f1315e7cc5121.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-921df33f47b8780c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/config.rs`."><title>config.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b0742ba02757f159.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="liberdus_proxy" data-themes="" data-resource-suffix="" data-rustdoc-version="1.83.0 (90b35a623 2024-11-26)" data-channel="1.83.0" data-search-js="search-f0d225181b97f9a4.js" data-settings-js="settings-805db61a62df4bd2.js" ><script src="../../static.files/storage-1d39b6787ed640ff.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-f070b9041d14864c.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-0111fcff984fae8f.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">liberdus_proxy/</div>config.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -83,7 +84,45 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
-</pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a></pre></div><pre class="rust"><code><span class="doccomment">//! Configuration for the rpc server.
 </span><span class="kw">use </span>std::fs;
 
 <span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
@@ -114,11 +153,16 @@
     <span class="doccomment">/// Standalone network configuration
     </span><span class="kw">pub </span>standalone_network: StandaloneNetworkConfig,
 
+    <span class="doccomment">/// Node filtering configuration for join-ordered lists
+    </span><span class="kw">pub </span>node_filtering: NodeFilteringConfig,
+
     <span class="kw">pub </span>tls: TLSConfig,
 
     <span class="kw">pub </span>shardus_monitor: ShardusMonitorProxyConfig,
 
     <span class="kw">pub </span>local_source: LocalSource,
+
+    <span class="kw">pub </span>notifier: NotifierConfig,
 }
 
 <span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
@@ -129,6 +173,20 @@
 </span><span class="kw">pub struct </span>StandaloneNetworkConfig {
     <span class="kw">pub </span>replacement_ip: String,
     <span class="kw">pub </span>enabled: bool,
+}
+
+<span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
+</span><span class="doccomment">/// Node filtering configuration for join-ordered node lists
+/// This helps avoid unstable nodes that are joining or leaving the network
+</span><span class="kw">pub struct </span>NodeFilteringConfig {
+    <span class="doccomment">/// Whether to enable node filtering based on join order
+    </span><span class="kw">pub </span>enabled: bool,
+    <span class="doccomment">/// Number of nodes to remove from the top of the join-ordered list
+    </span><span class="kw">pub </span>remove_top_nodes: usize,
+    <span class="doccomment">/// Number of nodes to remove from the bottom of the join-ordered list
+    </span><span class="kw">pub </span>remove_bottom_nodes: usize,
+    <span class="doccomment">/// Minimum number of nodes required before filtering is applied
+    </span><span class="kw">pub </span>min_nodes_for_filtering: usize,
 }
 
 <span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
@@ -155,6 +213,12 @@
     <span class="kw">pub </span>collector_event_server_port: u16,
 }
 
+<span class="attr">#[derive(Debug, serde::Deserialize, Clone)]
+</span><span class="kw">pub struct </span>NotifierConfig {
+    <span class="kw">pub </span>ip: String,
+    <span class="kw">pub </span>port: u16,
+}
+
 <span class="doccomment">/// Load the configuration from the config json file
 /// path is src/config.json
 </span><span class="kw">impl </span>Config {
@@ -166,6 +230,20 @@
 
         serde_json::from_str(<span class="kw-2">&amp;</span>config_data)
             .map_err(|err| <span class="macro">format!</span>(<span class="string">"Failed to parse config file: {}"</span>, err))
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>load_reads_default_config() {
+        <span class="kw">let </span>cfg = Config::load().expect(<span class="string">"config should parse"</span>);
+        <span class="macro">assert_eq!</span>(cfg.http_port, <span class="number">3030</span>);
+        <span class="macro">assert!</span>(cfg.debug);
+        <span class="macro">assert_eq!</span>(cfg.tls.enabled, <span class="bool-val">false</span>);
+        <span class="macro">assert_eq!</span>(cfg.node_filtering.remove_top_nodes, <span class="number">3</span>);
     }
 }
 </code></pre></div></section></main></body></html>

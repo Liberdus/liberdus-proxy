@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cold_fetch","handle_request","init_caches","is_monitor_route"],"static":["CACHE_MAP"],"struct":["PayloadCache"],"type":["PayloadCacheMap"]};
+window.SIDEBAR_ITEMS = {"fn":["handle_request","is_monitor_route"],"static":["CACHE_MAP"],"struct":["PayloadCache"]};

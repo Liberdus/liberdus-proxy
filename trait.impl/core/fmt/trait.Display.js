@@ -1,5 +1,5 @@
 (function() {
-    var implementors = Object.fromEntries([["liberdus_proxy",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"enum\" href=\"liberdus_proxy/crypto/enum.HexStringOrBuffer.html\" title=\"enum liberdus_proxy::crypto::HexStringOrBuffer\">HexStringOrBuffer</a>"]]]]);
+    var implementors = Object.fromEntries([["liberdus_proxy",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.83.0/core/fmt/trait.Display.html\" title=\"trait core::fmt::Display\">Display</a> for <a class=\"enum\" href=\"liberdus_proxy/crypto/enum.HexStringOrBuffer.html\" title=\"enum liberdus_proxy::crypto::HexStringOrBuffer\">HexStringOrBuffer</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {

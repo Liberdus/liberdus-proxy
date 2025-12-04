@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_request","is_notifier_route"]};

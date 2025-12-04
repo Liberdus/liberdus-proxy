@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Methods"],"fn":["generate_uuid","handle_stream","listen"],"type":["SocketId","SocketIdents","WebsocketIncoming"]};
+window.SIDEBAR_ITEMS = {"enum":["Methods"],"fn":["listen"],"type":["SocketId","SocketIdents","WebsocketIncoming"]};
