@@ -317,7 +317,175 @@
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
 //!
 //! This module provides functionality for managing and discovering archivers in the network.
 //! It includes methods for loading archivers, verifying their authenticity, and maintaining
@@ -518,17 +686,46 @@
     }
 }
 
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::crypto::{Format, HexStringOrBuffer};
+    <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>std::time::Duration;
+    <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
+    <span class="kw">use </span>tokio::net::TcpListener;
+    <span class="kw">use </span>tokio::sync::Mutex;
+    <span class="kw">use </span>tokio::time::timeout;
 
-    <span class="kw">fn </span>sample_crypto() -&gt; Arc&lt;ShardusCrypto&gt; {
+    <span class="kw">static </span>CACHE_LOCK: Mutex&lt;()&gt; = Mutex::const_new(());
+
+    <span class="kw">fn </span>base_crypto() -&gt; Arc&lt;ShardusCrypto&gt; {
         Arc::new(ShardusCrypto::new(
             <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>,
         ))
     }
 
-    <span class="kw">fn </span>sample_config() -&gt; config::Config {
+    <span class="kw">fn </span>signing_material() -&gt; (
+        sodiumoxide::crypto::sign::PublicKey,
+        sodiumoxide::crypto::sign::SecretKey,
+        ShardusCrypto,
+    ) {
+        <span class="kw">let </span>crypto = ShardusCrypto::new(
+            <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>,
+        );
+        <span class="kw">let </span>sk = sodiumoxide::crypto::sign::SecretKey::from_slice(
+            <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(
+                <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"</span>,
+            )
+            .unwrap(),
+        )
+        .expect(<span class="string">"Invalid secret key"</span>);
+        <span class="kw">let </span>pk = sk.public_key();
+        (pk, sk, crypto)
+    }
+
+    <span class="kw">fn </span>test_config(standalone: bool) -&gt; config::Config {
         config::Config {
             http_port: <span class="number">0</span>,
             crypto_seed:
@@ -539,8 +736,8 @@
             max_http_timeout_ms: <span class="number">1_000</span>,
             tcp_keepalive_time_sec: <span class="number">1</span>,
             standalone_network: config::StandaloneNetworkConfig {
-                replacement_ip: <span class="string">"127.0.0.1"</span>.into(),
-                enabled: <span class="bool-val">false</span>,
+                replacement_ip: <span class="string">"10.0.0.1"</span>.into(),
+                enabled: standalone,
             },
             node_filtering: config::NodeFilteringConfig {
                 enabled: <span class="bool-val">false</span>,
@@ -560,7 +757,7 @@
                 https: <span class="bool-val">false</span>,
             },
             local_source: config::LocalSource {
-                collector_api_ip: String::new(),
+                collector_api_ip: <span class="string">"127.0.0.1"</span>.into(),
                 collector_api_port: <span class="number">0</span>,
                 collector_event_server_ip: String::new(),
                 collector_event_server_port: <span class="number">0</span>,
@@ -572,22 +769,160 @@
         }
     }
 
+    <span class="kw">fn </span>sign_payload(
+        crypto: <span class="kw-2">&amp;</span>ShardusCrypto,
+        active_archivers: <span class="kw-2">&amp;</span>[Archiver],
+        sk: <span class="kw-2">&amp;</span>sodiumoxide::crypto::sign::SecretKey,
+        pk: <span class="kw-2">&amp;</span>sodiumoxide::crypto::sign::PublicKey,
+    ) -&gt; Signature {
+        <span class="kw">let </span>unsigned_msg = <span class="macro">serde_json::json!</span>({
+            <span class="string">"activeArchivers"</span>: active_archivers,
+        });
+        <span class="kw">let </span>hash = crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), Format::Hex);
+        <span class="kw">let </span>sig = crypto
+            .sign(HexStringOrBuffer::Hex(hash.to_string()), sk)
+            .expect(<span class="string">"signature should succeed"</span>);
+
+        Signature {
+            owner: sodiumoxide::hex::encode(pk.as_ref()),
+            sig: sodiumoxide::hex::encode(sig),
+        }
+    }
+
+    <span class="kw">async fn </span>spawn_mock_archiver(body: String) -&gt; (u16, tokio::task::JoinHandle&lt;()&gt;) {
+        <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:0"</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">"listener should bind"</span>);
+        <span class="kw">let </span>port = listener.local_addr().unwrap().port();
+        <span class="kw">let </span>response = <span class="macro">format!</span>(
+            <span class="string">"HTTP/1.1 200 OK
+Content-Length: {}
+Connection: close
+
+{}"</span>,
+            body.as_bytes().len(),
+            body
+        );
+
+        <span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>((<span class="kw-2">mut </span>stream, <span class="kw">_</span>)) = listener.accept().<span class="kw">await </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0u8</span>; <span class="number">1024</span>];
+                <span class="kw">let _ </span>= stream.read(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span>;
+                <span class="kw">let _ </span>= stream.write_all(response.as_bytes()).<span class="kw">await</span>;
+                <span class="kw">let _ </span>= stream.shutdown().<span class="kw">await</span>;
+            }
+        });
+
+        (port, handle)
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>discover_updates_active_list_and_cache() {
+        <span class="kw">let </span>_cache_guard = CACHE_LOCK.lock().<span class="kw">await</span>;
+        <span class="kw">let _ </span>= tokio::fs::remove_file(<span class="string">"known_archiver_cache.json"</span>).<span class="kw">await</span>;
+
+        <span class="kw">let </span>(pk, sk, crypto) = signing_material();
+        <span class="kw">let </span>config = test_config(<span class="bool-val">true</span>);
+
+        <span class="kw">let </span>returned_archiver = Archiver {
+            publicKey: <span class="string">"returned_pk"</span>.into(),
+            port: <span class="number">9000</span>,
+            ip: <span class="string">"127.0.0.1"</span>.into(),
+        };
+        <span class="kw">let </span>body = serde_json::to_string(<span class="kw-2">&amp;</span>SignedArchiverListResponse {
+            activeArchivers: <span class="macro">vec!</span>[returned_archiver.clone()],
+            sign: sign_payload(<span class="kw-2">&amp;</span>crypto, <span class="kw-2">&amp;</span>[returned_archiver.clone()], <span class="kw-2">&amp;</span>sk, <span class="kw-2">&amp;</span>pk),
+        })
+        .unwrap();
+
+        <span class="kw">let </span>(port, server) = spawn_mock_archiver(body).<span class="kw">await</span>;
+        <span class="kw">let </span>seed_archiver = Archiver {
+            publicKey: <span class="string">"seed_pk"</span>.into(),
+            port,
+            ip: <span class="string">"127.0.0.1"</span>.into(),
+        };
+
+        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(Arc::new(crypto), <span class="macro">vec!</span>[seed_archiver], config));
+
+        timeout(Duration::from_secs(<span class="number">3</span>), util.clone().discover())
+            .<span class="kw">await
+            </span>.expect(<span class="string">"discover should complete"</span>);
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="kw">let </span>active = util.get_active_archivers();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
+        <span class="macro">assert_eq!</span>(guard.len(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].publicKey, <span class="string">"returned_pk"</span>);
+        <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].ip, <span class="string">"10.0.0.1"</span>);
+
+        tokio::time::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+
+        <span class="kw">let </span>cache_contents = tokio::fs::read_to_string(<span class="string">"known_archiver_cache.json"</span>)
+            .<span class="kw">await
+            </span>.expect(<span class="string">"cache file should be written"</span>);
+        <span class="kw">let </span>cached: Vec&lt;Archiver&gt; = serde_json::from_str(<span class="kw-2">&amp;</span>cache_contents).unwrap();
+        <span class="macro">assert_eq!</span>(cached.len(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(cached[<span class="number">0</span>].ip, <span class="string">"10.0.0.1"</span>);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>discover_ignores_invalid_signatures() {
+        <span class="kw">let </span>_cache_guard = CACHE_LOCK.lock().<span class="kw">await</span>;
+        <span class="kw">let _ </span>= tokio::fs::remove_file(<span class="string">"known_archiver_cache.json"</span>).<span class="kw">await</span>;
+
+        <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, crypto) = signing_material();
+        <span class="kw">let </span>config = test_config(<span class="bool-val">false</span>);
+
+        <span class="kw">let </span>bad_signature_response = serde_json::to_string(<span class="kw-2">&amp;</span>SignedArchiverListResponse {
+            activeArchivers: <span class="macro">vec!</span>[Archiver {
+                publicKey: <span class="string">"returned_pk"</span>.into(),
+                port: <span class="number">9000</span>,
+                ip: <span class="string">"127.0.0.1"</span>.into(),
+            }],
+            sign: Signature {
+                owner: <span class="string">"00"</span>.into(),
+                sig: <span class="string">"01"</span>.into(),
+            },
+        })
+        .unwrap();
+
+        <span class="kw">let </span>(port, server) = spawn_mock_archiver(bad_signature_response).<span class="kw">await</span>;
+        <span class="kw">let </span>seed_archiver = Archiver {
+            publicKey: <span class="string">"seed_pk"</span>.into(),
+            port,
+            ip: <span class="string">"127.0.0.1"</span>.into(),
+        };
+
+        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(Arc::new(crypto), <span class="macro">vec!</span>[seed_archiver], config));
+
+        timeout(Duration::from_secs(<span class="number">3</span>), util.clone().discover())
+            .<span class="kw">await
+            </span>.expect(<span class="string">"discover should complete"</span>);
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="kw">let </span>active = util.get_active_archivers();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
+        <span class="macro">assert!</span>(guard.is_empty());
+        <span class="macro">assert!</span>(!std::path::Path::new(<span class="string">"known_archiver_cache.json"</span>).exists());
+    }
+
     <span class="attr">#[test]
     </span><span class="kw">fn </span>verify_signature_roundtrip() {
-        <span class="kw">let </span>crypto = sample_crypto();
+        <span class="kw">let </span>crypto = base_crypto();
         <span class="kw">let </span>archivers = <span class="macro">vec!</span>[Archiver {
             publicKey: <span class="string">"pk"</span>.into(),
             port: <span class="number">80</span>,
             ip: <span class="string">"127.0.0.1"</span>.into(),
         }];
 
-        <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), sample_config());
+        <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(<span class="bool-val">false</span>));
 
         <span class="kw">let </span>unsigned_msg = <span class="macro">serde_json::json!</span>({<span class="string">"activeArchivers"</span>: archivers});
         <span class="kw">let </span>hash = crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), <span class="kw">crate</span>::crypto::Format::Hex);
 
         <span class="kw">let </span>kp = crypto.get_key_pair_using_sk(<span class="kw-2">&amp;</span><span class="kw">crate</span>::crypto::HexStringOrBuffer::Hex(
-            <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"</span>.into(),
+            <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
+                </span>.into(),
         ));
 
         <span class="kw">let </span>signed = crypto
@@ -607,25 +942,26 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>verify_signature_rejects_invalid() {
-        <span class="kw">let </span>crypto = sample_crypto();
+        <span class="kw">let </span>crypto = base_crypto();
         <span class="kw">let </span>archivers = <span class="macro">vec!</span>[Archiver {
             publicKey: <span class="string">"pk"</span>.into(),
             port: <span class="number">80</span>,
             ip: <span class="string">"127.0.0.1"</span>.into(),
         }];
-        <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), sample_config());
+        <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(<span class="bool-val">false</span>));
 
         <span class="kw">let </span>unsigned_msg = <span class="macro">serde_json::json!</span>({<span class="string">"activeArchivers"</span>: archivers});
         <span class="kw">let </span>hash = crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), <span class="kw">crate</span>::crypto::Format::Hex);
         <span class="kw">let </span>kp = crypto.get_key_pair_using_sk(<span class="kw-2">&amp;</span><span class="kw">crate</span>::crypto::HexStringOrBuffer::Hex(
-            <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"</span>.into(),
+            <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
+                </span>.into(),
         ));
         <span class="kw">let </span><span class="kw-2">mut </span>signed = crypto
             .sign(hash, <span class="kw-2">&amp;</span>kp.secret_key)
             .expect(<span class="string">"sign should succeed"</span>);
-        signed[<span class="number">0</span>] ^= <span class="number">0xFF</span>; <span class="comment">// corrupt signature bytes
+        signed[<span class="number">0</span>] ^= <span class="number">0xFF</span>;
 
-        </span><span class="kw">let </span>payload = SignedArchiverListResponse {
+        <span class="kw">let </span>payload = SignedArchiverListResponse {
             activeArchivers: archivers,
             sign: Signature {
                 owner: sodiumoxide::hex::encode(kp.public_key),
