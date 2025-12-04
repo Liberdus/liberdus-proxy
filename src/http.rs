@@ -509,6 +509,7 @@ pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::AsyncWriteExt;
 
     #[test]
     fn test_strip_first_route() {
@@ -531,5 +532,63 @@ mod tests {
         let result = strip_route_root(hdr);
         let expected = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
         assert_eq!(&result[..], &expected[..]);
+    }
+
+    #[test]
+    fn set_http_header_updates_and_appends() {
+        let mut buffer = b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nbody".to_vec();
+
+        set_http_header(&mut buffer, "Connection", "keep-alive");
+        set_http_header(&mut buffer, "X-New", "present");
+
+        let text = String::from_utf8(buffer).unwrap();
+        assert!(text.contains("Connection: keep-alive"));
+        assert!(text.contains("X-New: present"));
+        assert!(text.ends_with("\r\n\r\nbody"));
+    }
+
+    #[test]
+    fn parse_content_length_variants() {
+        let headers = b"Content-Length: 42\r\nOther: v\r\n";
+        assert_eq!(parse_content_length(headers), Some(42));
+
+        let missing = b"Other: v\r\n";
+        assert_eq!(parse_content_length(missing), None);
+
+        let malformed = b"Content-Length: nope\r\n";
+        assert_eq!(parse_content_length(malformed), None);
+    }
+
+    #[tokio::test]
+    async fn collect_http_reads_entire_body() {
+        let request = b"GET / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello";
+        let (mut writer, mut reader) = tokio::io::duplex(64);
+
+        tokio::spawn(async move {
+            writer.write_all(request).await.unwrap();
+        });
+
+        let mut buffer = Vec::new();
+        collect_http(&mut reader, &mut buffer).await.unwrap();
+
+        assert_eq!(buffer, request);
+    }
+
+    #[test]
+    fn get_route_parses_method_and_path() {
+        let (method, path) = get_route(b"POST /abc?q=1 HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        assert_eq!(method, "POST");
+        assert_eq!(path, "/abc?q=1");
+    }
+
+    #[test]
+    fn extract_and_recombine_body() {
+        let raw = b"HTTP/1.1 200 OK\r\nHeader: v\r\n\r\npayload";
+        let body = extract_body(raw);
+        assert_eq!(body, b"payload");
+
+        let (head, body_parts) = split_head_body(raw);
+        let rejoined = join_head_body(&head, &body_parts);
+        assert_eq!(rejoined, raw);
     }
 }

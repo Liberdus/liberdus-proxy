@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_tungstenite::tungstenite::Message;
 
 use crate::ws;
 use crate::{liberdus, rpc};
@@ -186,6 +185,29 @@ impl Manager {
         drop(read_guard);
         all_subscriptions
     }
+
+    #[cfg(test)]
+    pub async fn insert_subscription_for_test(
+        &self,
+        socket_id: &ws::SocketId,
+        account: &str,
+        timestamp: u128,
+    ) {
+        let mut guard = self.states.write().await;
+        guard
+            .accounts_by_sock
+            .entry(socket_id.clone())
+            .or_default()
+            .insert(account.to_string());
+        guard
+            .socks_by_account
+            .entry(account.to_string())
+            .or_default()
+            .insert(socket_id.clone());
+        guard
+            .last_received
+            .insert(account.to_string(), timestamp);
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -195,9 +217,9 @@ pub struct AccountUpdatePayload {
     #[serde(deserialize_with = "deserialize_stringified_account_update")]
     data: AccountUpdate,
 }
-fn deserialize_stringified_account_update<'de, D>(
-    deserializer: D,
-) -> Result<AccountUpdate, D::Error>
+    fn deserialize_stringified_account_update<'de, D>(
+        deserializer: D,
+    ) -> Result<AccountUpdate, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -356,5 +378,110 @@ pub mod rpc_handler {
                 "subscribed_accounts": subscriptions
             }),
         )
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::crypto::ShardusCrypto;
+
+    fn sample_config() -> crate::config::Config {
+        crate::config::Config {
+            http_port: 0,
+            crypto_seed:
+                "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+            archiver_seed_path: String::new(),
+            nodelist_refresh_interval_sec: 1,
+            debug: false,
+            max_http_timeout_ms: 1_000,
+            tcp_keepalive_time_sec: 1,
+            standalone_network: crate::config::StandaloneNetworkConfig {
+                replacement_ip: "127.0.0.1".into(),
+                enabled: false,
+            },
+            node_filtering: crate::config::NodeFilteringConfig {
+                enabled: false,
+                remove_top_nodes: 0,
+                remove_bottom_nodes: 0,
+                min_nodes_for_filtering: 0,
+            },
+            tls: crate::config::TLSConfig {
+                enabled: false,
+                cert_path: String::new(),
+                key_path: String::new(),
+            },
+            shardus_monitor: crate::config::ShardusMonitorProxyConfig {
+                enabled: false,
+                upstream_ip: String::new(),
+                upstream_port: 0,
+                https: false,
+            },
+            local_source: crate::config::LocalSource {
+                collector_api_ip: String::new(),
+                collector_api_port: 0,
+                collector_event_server_ip: String::new(),
+                collector_event_server_port: 0,
+            },
+            notifier: crate::config::NotifierConfig {
+                ip: String::new(),
+                port: 0,
+            },
+        }
+    }
+
+    pub(crate) fn sample_manager() -> Manager {
+        let crypto = Arc::new(ShardusCrypto::new(
+            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
+        ));
+        let liberdus = Arc::new(crate::liberdus::Liberdus::new(
+            crypto,
+            Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            sample_config(),
+        ));
+        Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)
+    }
+
+    #[tokio::test]
+    async fn unsubscribe_all_clears_state() {
+        let manager = sample_manager();
+        manager
+            .insert_subscription_for_test(&"socket1".into(), "acct", 1)
+            .await;
+
+        manager.unsubscribe_all(&"socket1".into()).await;
+
+        assert!(manager.states.read().await.accounts_by_sock.is_empty());
+        assert!(manager.states.read().await.socks_by_account.is_empty());
+    }
+
+    #[tokio::test]
+    async fn listen_account_update_sends_notification() {
+        let manager = sample_manager();
+        manager
+            .insert_subscription_for_test(&"socket1".into(), "acct", 0)
+            .await;
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        manager
+            .socket_map
+            .write()
+            .await
+            .insert("socket1".into(), tx);
+
+        let payload = serde_json::json!({
+            "event": "accountUpdate",
+            "data": serde_json::to_string(&serde_json::json!({
+                "accountId": "acct",
+                "timestamp": 2,
+                "data": {"data": {"chatTimestamp": 2}}
+            }))
+            .unwrap()
+        });
+
+        listen_account_update_callback(payload, Arc::new(manager)).await;
+
+        let msg = rx.try_recv().expect("notification should be emitted");
+        assert_eq!(msg.result.unwrap()["account_id"], "acct");
     }
 }

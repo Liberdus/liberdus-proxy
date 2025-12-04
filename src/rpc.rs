@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tokio_tungstenite::tungstenite::Message;
 
 use crate::{
     subscription,
@@ -74,6 +73,53 @@ pub fn generate_error_response(id: Option<u32>, error_msg: String, code: i32) ->
             message: error_msg,
         }),
         id,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::subscription;
+    use crate::ws::{Methods, WebsocketIncoming};
+
+    #[tokio::test]
+    async fn handle_get_subscriptions_round_trip() {
+        let manager = subscription::tests::sample_manager();
+        manager
+            .insert_subscription_for_test(&"sock".into(), "acct", 1)
+            .await;
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let req = WebsocketIncoming {
+            id: 1,
+            jsonrpc: "2.0".into(),
+            method: Methods::GetSubscriptions,
+            params: vec![],
+        };
+
+        handle(req, Arc::new(manager), tx, "sock".into())
+            .await
+            .unwrap();
+
+        let response = rx.recv().await.unwrap();
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        let accounts = result["subscribed_accounts"].as_array().unwrap();
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], "acct");
+    }
+
+    #[test]
+    fn build_success_and_error_responses() {
+        let ok = generate_success_response(Some(1), serde_json::json!({"ok":true}));
+        assert_eq!(ok.id, Some(1));
+        assert!(ok.error.is_none());
+        assert_eq!(ok.result.unwrap()["ok"], true);
+
+        let err = generate_error_response(Some(2), "bad".into(), RpcErrorCode::InternalError as i32);
+        assert_eq!(err.id, Some(2));
+        assert!(err.result.is_none());
+        assert_eq!(err.error.unwrap().code, RpcErrorCode::InternalError as i32);
     }
 }
 

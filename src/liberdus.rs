@@ -566,6 +566,8 @@ pub struct AccountData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_weighted_random() {
@@ -633,6 +635,160 @@ mod tests {
             println!("{}", index);
             assert_eq!(true, true);
         }
+    }
+
+    fn sample_config() -> config::Config {
+        config::Config {
+            http_port: 0,
+            crypto_seed:
+                "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+            archiver_seed_path: String::new(),
+            nodelist_refresh_interval_sec: 1,
+            debug: false,
+            max_http_timeout_ms: 1_000,
+            tcp_keepalive_time_sec: 1,
+            standalone_network: config::StandaloneNetworkConfig {
+                replacement_ip: "127.0.0.1".into(),
+                enabled: false,
+            },
+            node_filtering: config::NodeFilteringConfig {
+                enabled: false,
+                remove_top_nodes: 0,
+                remove_bottom_nodes: 0,
+                min_nodes_for_filtering: 0,
+            },
+            tls: config::TLSConfig {
+                enabled: false,
+                cert_path: String::new(),
+                key_path: String::new(),
+            },
+            shardus_monitor: config::ShardusMonitorProxyConfig {
+                enabled: false,
+                upstream_ip: String::new(),
+                upstream_port: 0,
+                https: false,
+            },
+            local_source: config::LocalSource {
+                collector_api_ip: String::new(),
+                collector_api_port: 0,
+                collector_event_server_ip: String::new(),
+                collector_event_server_port: 0,
+            },
+            notifier: config::NotifierConfig {
+                ip: String::new(),
+                port: 0,
+            },
+        }
+    }
+
+    fn sample_liberdus() -> Liberdus {
+        let crypto = Arc::new(crypto::ShardusCrypto::new(
+            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
+        ));
+        Liberdus::new(
+            crypto,
+            Arc::new(RwLock::new(Vec::new())),
+            sample_config(),
+        )
+    }
+
+    #[test]
+    fn calculate_bias_maps_timeouts() {
+        let l = sample_liberdus();
+        assert!((l.calculate_bias(0, 1000) - 1.0).abs() < f64::EPSILON);
+        assert!(l.calculate_bias(1000, 1000) < 0.01);
+        assert_eq!(l.calculate_bias(10, 1), 1.0);
+    }
+
+    #[tokio::test]
+    async fn prepare_list_sorts_nodes_by_rtt() {
+        let liberdus = sample_liberdus();
+        {
+            let mut nodes = liberdus.active_nodelist.write().await;
+            nodes.push(Consensor {
+                id: "slow".into(),
+                ip: "127.0.0.1".into(),
+                port: 80,
+                publicKey: "pk1".into(),
+                rng_bias: None,
+            });
+            nodes.push(Consensor {
+                id: "fast".into(),
+                ip: "127.0.0.1".into(),
+                port: 80,
+                publicKey: "pk2".into(),
+                rng_bias: None,
+            });
+        }
+
+        {
+            let mut trips = liberdus.trip_ms.write().await;
+            trips.insert("slow".into(), 900);
+            trips.insert("fast".into(), 10);
+        }
+
+        liberdus.prepare_list().await;
+
+        let ordered = liberdus.active_nodelist.read().await.clone();
+        assert_eq!(ordered[0].id, "fast");
+        assert!(ordered[0].rng_bias.unwrap() > ordered[1].rng_bias.unwrap());
+
+        let dist = liberdus
+            .load_distribution_commulative_bias
+            .read()
+            .await
+            .clone();
+        assert_eq!(dist.len(), 2);
+        assert!(liberdus
+            .list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn get_next_round_robins_then_bias() {
+        let liberdus = sample_liberdus();
+        {
+            let mut nodes = liberdus.active_nodelist.write().await;
+            nodes.push(Consensor {
+                id: "one".into(),
+                ip: "127.0.0.1".into(),
+                port: 80,
+                publicKey: "pk1".into(),
+                rng_bias: None,
+            });
+            nodes.push(Consensor {
+                id: "two".into(),
+                ip: "127.0.0.1".into(),
+                port: 80,
+                publicKey: "pk2".into(),
+                rng_bias: None,
+            });
+        }
+
+        {
+            let mut trips = liberdus.trip_ms.write().await;
+            trips.insert("one".into(), 50);
+            trips.insert("two".into(), 10);
+        }
+
+        let first = liberdus.get_next_appropriate_consensor().await.unwrap();
+        let second = liberdus.get_next_appropriate_consensor().await.unwrap();
+        assert_eq!(first.0, 0);
+        assert_eq!(second.0, 1);
+
+        let _ = liberdus.get_next_appropriate_consensor().await.unwrap();
+        assert!(liberdus
+            .list_prepared
+            .load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[test]
+    fn old_receipt_route_variants() {
+        assert_eq!(
+            is_old_receipt_route("/old_receipt/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"),
+            Some("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".into())
+        );
+        assert_eq!(is_old_receipt_route("/wrong/abcd"), None);
     }
 }
 
@@ -778,7 +934,7 @@ pub fn is_old_receipt_route(route: &str) -> Option<String> {
 
     match (parts.next(), parts.next(), parts.next()) {
         // first segment,   second segment,    make sure there’s no 3rd segment
-        (Some(seg @ "old_receipt") | Some(seg @ "oldreceipt"), Some(hash), None)
+        (Some(_seg @ "old_receipt") | Some(_seg @ "oldreceipt"), Some(hash), None)
             if hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
         {
             Some(hash.to_owned())
@@ -786,3 +942,4 @@ pub fn is_old_receipt_route(route: &str) -> Option<String> {
         _ => None,
     }
 }
+

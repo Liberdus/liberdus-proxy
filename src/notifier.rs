@@ -123,32 +123,98 @@ pub fn is_notifier_route(route: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::AsyncWriteExt;
-    use std::sync::RwLock;
-    use crate::config::Config;
+    use std::sync::Arc;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
+
+    use crate::config::{Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig, StandaloneNetworkConfig, TLSConfig};
+
+    fn test_config(port: u16) -> Config {
+        Config {
+            http_port: 0,
+            crypto_seed: String::new(),
+            archiver_seed_path: String::new(),
+            nodelist_refresh_interval_sec: 1,
+            debug: true,
+            max_http_timeout_ms: 1_000,
+            tcp_keepalive_time_sec: 1,
+            standalone_network: StandaloneNetworkConfig {
+                replacement_ip: "127.0.0.1".into(),
+                enabled: false,
+            },
+            node_filtering: NodeFilteringConfig {
+                enabled: false,
+                remove_top_nodes: 0,
+                remove_bottom_nodes: 0,
+                min_nodes_for_filtering: 0,
+            },
+            tls: TLSConfig {
+                enabled: false,
+                cert_path: String::new(),
+                key_path: String::new(),
+            },
+            shardus_monitor: ShardusMonitorProxyConfig {
+                enabled: false,
+                upstream_ip: String::new(),
+                upstream_port: 0,
+                https: false,
+            },
+            local_source: LocalSource {
+                collector_api_ip: "127.0.0.1".into(),
+                collector_api_port: 0,
+                collector_event_server_ip: String::new(),
+                collector_event_server_port: 0,
+            },
+            notifier: NotifierConfig {
+                ip: "127.0.0.1".into(),
+                port,
+            },
+        }
+    }
+
+    async fn run_request(buffer: Vec<u8>) -> Vec<u8> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let config = Arc::new(test_config(port));
+
+        let server = tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 256];
+                let _ = stream.read(&mut buf).await;
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                    .await;
+            }
+        });
+
+        let (mut client, mut peer) = tokio::io::duplex(1024);
+        let handle = tokio::spawn(async move {
+            handle_request(buffer, &mut client, config)
+                .await
+                .expect("request should succeed");
+        });
+
+        let mut output = vec![0u8; 256];
+        let n = peer.read(&mut output).await.unwrap();
+
+        handle.await.unwrap();
+        server.await.unwrap();
+
+        output[..n].to_vec()
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_notifier_get_request() {
-        let config = Config::load().unwrap();
-        let mut buffer = vec![];
-        buffer.extend_from_slice(b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n");
-
-        let mut stream = tokio::io::sink();
-        let result = notifier::handle_request(buffer, &mut stream, Arc::new(config)).await;
-
-        assert!(result.is_ok());
+        let buffer = b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
+        let response = run_request(buffer).await;
+        assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200"));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_notifier_post_request() {
-        let config = Config::load().unwrap();
-        let mut buffer = vec![];
-        buffer.extend_from_slice(b"POST /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\nContent-Length: 13\r\n\r\nHello, world!");
+        let mut buffer = b"POST /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\nContent-Length: 13\r\n\r\nHello, world!".to_vec();
         buffer.extend_from_slice(b"Hello, world!");
-
-        let mut stream = tokio::io::sink();
-        let result = notifier::handle_request(buffer, &mut stream, Arc::new(config)).await;
-
-        assert!(result.is_ok());
+        let response = run_request(buffer).await;
+        assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200"));
     }
 }
