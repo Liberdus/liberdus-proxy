@@ -509,7 +509,16 @@ pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::{AsyncWrite, AsyncWriteExt};
+    use crate::ws::SocketIdents;
+    use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use tokio::sync::RwLock;
+
+    fn test_liberdus() -> Arc<liberdus::Liberdus> {
+        let cfg = config::Config::load().expect("config should load");
+        let sc = Arc::new(crate::crypto::ShardusCrypto::new(&cfg.crypto_seed));
+        let archivers = Arc::new(tokio::sync::RwLock::new(Vec::<crate::archivers::Archiver>::new()));
+        Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
+    }
 
     #[test]
     fn test_strip_first_route() {
@@ -624,6 +633,26 @@ mod tests {
     }
 
     #[test]
+    fn set_http_header_replaces_existing_and_adds_new() {
+        let mut buffer = b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nhey".to_vec();
+        set_http_header(&mut buffer, "Content-Length", "10");
+        assert!(std::str::from_utf8(&buffer)
+            .unwrap()
+            .starts_with("HTTP/1.1 200 OK\r\nContent-Length: 10"));
+
+        set_http_header(&mut buffer, "X-Test", "abc");
+        let text = std::str::from_utf8(&buffer).unwrap();
+        assert!(text.contains("X-Test: abc"));
+        assert!(text.ends_with("\r\n\r\nhey"));
+    }
+
+    #[test]
+    fn parse_content_length_handles_invalid_values() {
+        let headers = b"Content-Length: not-a-number\r\nOther: v\r\n\r\n";
+        assert!(parse_content_length(headers).is_none());
+    }
+
+    #[test]
     fn extract_and_recombine_body() {
         let raw = b"HTTP/1.1 200 OK\r\nHeader: v\r\n\r\npayload";
         let body = extract_body(raw);
@@ -678,9 +707,69 @@ mod tests {
             .unwrap()
             .starts_with("HTTP/1.1 500"));
 
+        let mut writer = MockWrite::default();
+        rt.block_on(respond_with_notfound(&mut writer))
+            .expect("write should succeed");
+        assert!(std::str::from_utf8(&writer.data)
+            .unwrap()
+            .starts_with("HTTP/1.1 404"));
+
+        let mut writer = MockWrite::default();
+        rt.block_on(respond_with_timeout(&mut writer))
+            .expect("write should succeed");
+        assert!(std::str::from_utf8(&writer.data)
+            .unwrap()
+            .starts_with("HTTP/1.1 504"));
+
         let mut buffer = Vec::new();
         set_http_header(&mut buffer, "Content-Length", "0");
         // header insertion on non-http-like buffer should keep it empty
         assert!(buffer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn handle_stream_serves_debug_subscriptions() {
+        let config = Arc::new(config::Config::load().expect("config should load"));
+        let liberdus = test_liberdus();
+        let sock_map: SocketIdents = Arc::new(RwLock::new(std::collections::HashMap::new()));
+        let subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus.clone()));
+        subscription_manager
+            .insert_subscription_for_test(&"socket-1".to_string(), "acct", 1)
+            .await;
+
+        let request = b"GET /get_subscriptions HTTP/1.1\r\nHost: localhost\r\n\r\n";
+
+        let (mut client_side, server_side) = tokio::io::duplex(1024);
+
+        let handler = handle_stream(
+            server_side,
+            liberdus,
+            subscription_manager.clone(),
+            config,
+        );
+
+        let client = async {
+            client_side
+                .write_all(request)
+                .await
+                .expect("request should write");
+
+            let mut response = Vec::new();
+            client_side
+                .read_to_end(&mut response)
+                .await
+                .expect("response should read");
+
+            response
+        };
+
+        let (handler_result, response) = tokio::join!(handler, client);
+
+        // Ensure we got a JSON response containing our subscription entry
+        let text = String::from_utf8_lossy(&response);
+        assert!(text.contains("200 OK"));
+        assert!(text.contains("acct"));
+
+        handler_result.expect("handler should finish");
     }
 }
