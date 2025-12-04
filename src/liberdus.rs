@@ -29,13 +29,13 @@ pub struct Consensor {
 }
 
 #[allow(non_snake_case)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 struct SignedNodeListResp {
     pub nodeList: Vec<Consensor>,
     pub sign: Signature,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct Signature {
     pub owner: String,
     pub sig: String,
@@ -567,6 +567,8 @@ pub struct AccountData {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
     use tokio::sync::RwLock;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -742,6 +744,330 @@ mod tests {
         assert!(liberdus
             .list_prepared
             .load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    async fn start_http_server(response: String) -> (tokio::task::JoinHandle<()>, u16) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = vec![0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        (handle, port)
+    }
+
+    fn signed_node_list_with_keys(
+        crypto: &crypto::ShardusCrypto,
+        pk: &sodiumoxide::crypto::sign::PublicKey,
+        sk: &sodiumoxide::crypto::sign::SecretKey,
+        nodes: Vec<Consensor>,
+    ) -> SignedNodeListResp {
+        let unsigned_msg = serde_json::json!({
+            "nodeList": nodes.clone(),
+        });
+
+        let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
+        let sig_bytes = crypto
+            .sign(hash, sk)
+            .expect("signature")
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+
+        SignedNodeListResp {
+            nodeList: nodes,
+            sign: Signature {
+                owner: sodiumoxide::hex::encode(pk.as_ref()),
+                sig: sig_bytes,
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn update_active_nodelist_filters_and_replaces_ips() {
+        let crypto = Arc::new(crypto::ShardusCrypto::new(
+            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
+        ));
+        let (pk, sk) = sodiumoxide::crypto::sign::gen_keypair();
+
+        let mut nodes = vec![];
+        for id in 0..4 {
+            nodes.push(Consensor {
+                id: format!("node{}", id),
+                ip: "127.0.0.1".into(),
+                port: 9,
+                publicKey: "pk".into(),
+                rng_bias: None,
+            });
+        }
+
+        let good_resp = signed_node_list_with_keys(&crypto, &pk, &sk, nodes.clone());
+        let bad_resp = SignedNodeListResp {
+            nodeList: nodes.clone(),
+            sign: Signature {
+                owner: sodiumoxide::hex::encode(pk.as_ref()),
+                sig: "00".repeat(64),
+            },
+        };
+
+        let bad_json = serde_json::to_string(&bad_resp).unwrap();
+        let good_json = serde_json::to_string(&good_resp).unwrap();
+
+        let (bad_server, bad_port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            bad_json.len(), bad_json
+        ))
+        .await;
+
+        let (good_server, good_port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            good_json.len(), good_json
+        ))
+        .await;
+
+        let archivers = Arc::new(RwLock::new(vec![
+            archivers::Archiver {
+                ip: "127.0.0.1".into(),
+                port: bad_port,
+                publicKey: String::new(),
+            },
+            archivers::Archiver {
+                ip: "127.0.0.1".into(),
+                port: good_port,
+                publicKey: String::new(),
+            },
+        ]));
+
+        let mut cfg = sample_config();
+        cfg.standalone_network.enabled = true;
+        cfg.standalone_network.replacement_ip = "192.0.2.1".into();
+        cfg.node_filtering.enabled = true;
+        cfg.node_filtering.remove_top_nodes = 1;
+        cfg.node_filtering.remove_bottom_nodes = 1;
+        cfg.node_filtering.min_nodes_for_filtering = 2;
+
+        let liberdus = Liberdus::new(crypto, archivers, cfg);
+        liberdus.update_active_nodelist().await;
+
+        bad_server.abort();
+        good_server.abort();
+
+        let list = liberdus.active_nodelist.read().await.clone();
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().all(|n| n.ip == "192.0.2.1"));
+        assert!(list.iter().all(|n| n.id == "node1" || n.id == "node2"));
+        assert!(liberdus
+            .load_distribution_commulative_bias
+            .read()
+            .await
+            .is_empty());
+    }
+
+    #[test]
+    fn verify_signature_accepts_valid_and_rejects_invalid() {
+        let crypto = crypto::ShardusCrypto::new(
+            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
+        );
+        let (pk, sk) = sodiumoxide::crypto::sign::gen_keypair();
+
+        let nodes = vec![Consensor {
+            id: "node".into(),
+            ip: "127.0.0.1".into(),
+            port: 1,
+            publicKey: String::new(),
+            rng_bias: None,
+        }];
+
+        let valid = signed_node_list_with_keys(&crypto, &pk, &sk, nodes.clone());
+
+        let liberdus = sample_liberdus();
+        assert!(liberdus.verify_signature(&valid));
+
+        let mut invalid = valid.clone();
+        invalid.sign.sig = "00".into();
+        assert!(!liberdus.verify_signature(&invalid));
+    }
+
+    #[tokio::test]
+    async fn get_account_by_address_prefers_local_and_fallbacks() {
+        let collector_resp = serde_json::json!({
+            "accounts": [ { "data": {"balance": 10} } ]
+        })
+        .to_string();
+        let (collector, collector_port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            collector_resp.len(), collector_resp
+        ))
+        .await;
+
+        let mut cfg = sample_config();
+        cfg.local_source.collector_api_ip = "127.0.0.1".into();
+        cfg.local_source.collector_api_port = collector_port;
+
+        let liberdus = Liberdus::new(
+            Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed)),
+            Arc::new(RwLock::new(Vec::new())),
+            cfg.clone(),
+        );
+
+        let value = liberdus
+            .get_account_by_address("0xabc")
+            .await
+            .expect("collector account");
+        assert_eq!(value["balance"], 10);
+        collector.abort();
+
+        // failing collector triggers fallback
+        let cons_body = "{\"account\":true}";
+        let (cons_server, cons_port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            cons_body.len(), cons_body
+        ))
+        .await;
+
+        let failing = start_http_server(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n".into(),
+        )
+        .await;
+
+        let mut cfg = sample_config();
+        cfg.local_source.collector_api_ip = "127.0.0.1".into();
+        cfg.local_source.collector_api_port = failing.1;
+
+        let liberdus = Liberdus::new(
+            Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed)),
+            Arc::new(RwLock::new(Vec::new())),
+            cfg,
+        );
+
+        {
+            let mut nodes = liberdus.active_nodelist.write().await;
+            nodes.push(Consensor {
+                id: "n1".into(),
+                ip: "127.0.0.1".into(),
+                port: cons_port,
+                publicKey: String::new(),
+                rng_bias: Some(1.0),
+            });
+        }
+        liberdus
+            .load_distribution_commulative_bias
+            .write()
+            .await
+            .push(1.0);
+        liberdus
+            .list_prepared
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let fallback = liberdus
+            .get_account_by_address("0xabc")
+            .await
+            .expect("fallback account");
+        assert_eq!(fallback, serde_json::Value::Bool(true));
+
+        cons_server.abort();
+        failing.0.abort();
+    }
+
+    #[tokio::test]
+    async fn handle_request_routes_and_sets_headers() {
+        let mut cfg = sample_config();
+        cfg.max_http_timeout_ms = 2_000;
+        cfg.tcp_keepalive_time_sec = 3;
+
+        let ok_body = "ok";
+        let (server_handle, port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            ok_body.len(), ok_body
+        ))
+        .await;
+
+        let liberdus = sample_liberdus();
+        {
+            let mut nodes = liberdus.active_nodelist.write().await;
+            nodes.push(Consensor {
+                id: "fast".into(),
+                ip: "127.0.0.1".into(),
+                port,
+                publicKey: String::new(),
+                rng_bias: Some(1.0),
+            });
+        }
+        liberdus
+            .load_distribution_commulative_bias
+            .write()
+            .await
+            .push(1.0);
+        liberdus
+            .list_prepared
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
+        let (mut client, mut peer) = tokio::io::duplex(1024);
+
+        handle_request(request, &mut client, Arc::new(liberdus), Arc::new(cfg))
+            .await
+            .expect("request should succeed");
+
+        let mut buf = vec![0u8; 512];
+        let n = tokio::time::timeout(std::time::Duration::from_secs(1), peer.read(&mut buf))
+            .await
+            .unwrap()
+            .unwrap();
+        let response = std::str::from_utf8(&buf[..n]).unwrap();
+        assert!(response.contains("Connection: keep-alive"));
+        assert!(response.contains("Keep-Alive: timeout=3"));
+        assert!(response.contains("ok"));
+
+        server_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn handle_request_handles_connection_error() {
+        let mut cfg = sample_config();
+        cfg.max_http_timeout_ms = 100;
+
+        let liberdus = sample_liberdus();
+        {
+            let mut nodes = liberdus.active_nodelist.write().await;
+            nodes.push(Consensor {
+                id: "fast".into(),
+                ip: "127.0.0.1".into(),
+                port: 9_999,
+                publicKey: String::new(),
+                rng_bias: Some(1.0),
+            });
+        }
+        liberdus
+            .load_distribution_commulative_bias
+            .write()
+            .await
+            .push(1.0);
+        liberdus
+            .list_prepared
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
+        let (mut client, mut peer) = tokio::io::duplex(1024);
+
+        let err = handle_request(request, &mut client, Arc::new(liberdus), Arc::new(cfg))
+            .await
+            .expect_err("connection should fail");
+        let err_text = format!("{}", err);
+        assert!(err_text.contains("Connection refused") || err_text.contains("Error connecting"));
+
+        let mut buf = vec![0u8; 128];
+        let n = tokio::time::timeout(std::time::Duration::from_secs(1), peer.read(&mut buf))
+            .await
+            .unwrap()
+            .unwrap();
+        let response = std::str::from_utf8(&buf[..n]).unwrap();
+        assert!(response.starts_with("HTTP/1.1 504"));
     }
 
     #[tokio::test]
