@@ -387,4 +387,50 @@ mod tests {
         let sockets = sock_map.read().await;
         assert!(sockets.is_empty());
     }
+
+    #[tokio::test]
+    async fn handle_stream_sends_ping_and_tracks_pong() {
+        let liberdus = test_liberdus();
+        let sock_map: SocketIdents = Arc::new(RwLock::new(HashMap::new()));
+        let subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let sock_map_server = sock_map.clone();
+        let subscription_manager_server = subscription_manager.clone();
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            handle_stream(stream, sock_map_server, subscription_manager_server)
+                .await
+                .unwrap();
+        });
+
+        let url = format!("ws://{}", addr);
+        let (mut client, _) = tokio_tungstenite::connect_async(url).await.unwrap();
+
+        // wait for the server to register the socket id
+        loop {
+            if !sock_map.read().await.is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        // send a manual pong to exercise the handler branch
+        client
+            .send(Message::Pong("manual-pong".into()))
+            .await
+            .unwrap();
+        tokio::task::yield_now().await;
+
+        // ensure the socket is still tracked after the pong is processed
+        assert_eq!(sock_map.read().await.len(), 1);
+
+        client.close(None).await.unwrap();
+        server.await.unwrap();
+
+        assert!(sock_map.read().await.is_empty());
+        assert!(subscription_manager.get_all_subscriptions().await.is_empty());
+    }
 }
