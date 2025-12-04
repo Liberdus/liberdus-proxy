@@ -388,7 +388,53 @@
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{rpc, subscription};
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{rpc, subscription};
 <span class="kw">use crate</span>::{config, liberdus, Stats};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
@@ -776,6 +822,52 @@
 
         <span class="kw">let </span>sockets = sock_map.read().<span class="kw">await</span>;
         <span class="macro">assert!</span>(sockets.is_empty());
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>handle_stream_sends_ping_and_tracks_pong() {
+        <span class="kw">let </span>liberdus = test_liberdus();
+        <span class="kw">let </span>sock_map: SocketIdents = Arc::new(RwLock::new(HashMap::new()));
+        <span class="kw">let </span>subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus));
+
+        <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:0"</span>).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>addr = listener.local_addr().unwrap();
+        <span class="kw">let </span>sock_map_server = sock_map.clone();
+        <span class="kw">let </span>subscription_manager_server = subscription_manager.clone();
+
+        <span class="kw">let </span>server = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span>.unwrap();
+            handle_stream(stream, sock_map_server, subscription_manager_server)
+                .<span class="kw">await
+                </span>.unwrap();
+        });
+
+        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"ws://{}"</span>, addr);
+        <span class="kw">let </span>(<span class="kw-2">mut </span>client, <span class="kw">_</span>) = tokio_tungstenite::connect_async(url).<span class="kw">await</span>.unwrap();
+
+        <span class="comment">// wait for the server to register the socket id
+        </span><span class="kw">loop </span>{
+            <span class="kw">if </span>!sock_map.read().<span class="kw">await</span>.is_empty() {
+                <span class="kw">break</span>;
+            }
+            tokio::task::yield_now().<span class="kw">await</span>;
+        }
+
+        <span class="comment">// send a manual pong to exercise the handler branch
+        </span>client
+            .send(Message::Pong(<span class="string">"manual-pong"</span>.into()))
+            .<span class="kw">await
+            </span>.unwrap();
+        tokio::task::yield_now().<span class="kw">await</span>;
+
+        <span class="comment">// ensure the socket is still tracked after the pong is processed
+        </span><span class="macro">assert_eq!</span>(sock_map.read().<span class="kw">await</span>.len(), <span class="number">1</span>);
+
+        client.close(<span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert!</span>(sock_map.read().<span class="kw">await</span>.is_empty());
+        <span class="macro">assert!</span>(subscription_manager.get_all_subscriptions().<span class="kw">await</span>.is_empty());
     }
 }
 </code></pre></div></section></main></body></html>
