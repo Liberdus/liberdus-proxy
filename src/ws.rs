@@ -328,3 +328,63 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{archivers, config, crypto};
+    use tokio::net::TcpListener;
+    use tokio_tungstenite::tungstenite::protocol::Message;
+
+    fn test_liberdus() -> Arc<liberdus::Liberdus> {
+        let cfg = config::Config::load().expect("config should load");
+        let sc = Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed));
+        let archivers = Arc::new(tokio::sync::RwLock::new(Vec::<archivers::Archiver>::new()));
+        Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
+    }
+
+    #[test]
+    fn generate_uuid_produces_v4_layout() {
+        let id = generate_uuid();
+        let parts: Vec<&str> = id.split('-').collect();
+        assert_eq!(parts.len(), 5);
+        // ensure variant and version bits are set
+        assert!(parts[2].starts_with('4'));
+        let eighth = parts[3].chars().next().unwrap();
+        assert!("89ab".contains(eighth));
+    }
+
+    #[tokio::test]
+    async fn handle_stream_processes_invalid_json_and_closes() {
+        let liberdus = test_liberdus();
+        let sock_map: SocketIdents = Arc::new(RwLock::new(HashMap::new()));
+        let subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let sock_map_server = sock_map.clone();
+        let subscription_manager_server = subscription_manager.clone();
+
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            handle_stream(stream, sock_map_server, subscription_manager_server)
+                .await
+                .unwrap();
+        });
+
+        let url = format!("ws://{}", addr);
+        let (mut client, _) = tokio_tungstenite::connect_async(url).await.unwrap();
+
+        // send malformed JSON to hit error branch
+        client.send(Message::Text("not-json".into())).await.unwrap();
+        let response = client.next().await.unwrap().unwrap();
+        assert!(response.to_string().contains("Invalid JSON"));
+
+        // close the socket so the server task can finish cleanly
+        client.close(None).await.unwrap();
+        server.await.unwrap();
+
+        let sockets = sock_map.read().await;
+        assert!(sockets.is_empty());
+    }
+}

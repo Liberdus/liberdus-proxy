@@ -509,7 +509,7 @@ pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncWrite, AsyncWriteExt};
 
     #[test]
     fn test_strip_first_route() {
@@ -574,11 +574,53 @@ mod tests {
         assert_eq!(buffer, request);
     }
 
+    #[tokio::test]
+    async fn collect_http_errors_on_unexpected_eof() {
+        let (mut writer, mut reader) = tokio::io::duplex(64);
+        tokio::spawn(async move {
+            // send an incomplete request and then close the writer
+            writer
+                .write_all(b"GET / HTTP/1.1\r\nContent-Length: 10\r\n")
+                .await
+                .unwrap();
+        });
+
+        let mut buffer = Vec::new();
+        let result = collect_http(&mut reader, &mut buffer).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[tokio::test]
+    async fn collect_http_rejects_large_payloads() {
+        let (mut writer, mut reader) = tokio::io::duplex(8 * 1024);
+        tokio::spawn(async move {
+            // oversize body without a terminating header split
+            let big = vec![b'a'; 1_200_000];
+            let mut req = b"POST / HTTP/1.1\r\nContent-Length: 1200000\r\n\r\n".to_vec();
+            req.extend_from_slice(&big);
+            writer.write_all(&req).await.unwrap();
+        });
+
+        let mut buffer = Vec::new();
+        let result = collect_http(&mut reader, &mut buffer).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+    }
+
     #[test]
     fn get_route_parses_method_and_path() {
         let (method, path) = get_route(b"POST /abc?q=1 HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
         assert_eq!(method, "POST");
         assert_eq!(path, "/abc?q=1");
+    }
+
+    #[test]
+    fn get_route_rejects_unknown_methods() {
+        let route = get_route(b"TRACE /abc HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(route.is_none());
     }
 
     #[test]
@@ -590,5 +632,55 @@ mod tests {
         let (head, body_parts) = split_head_body(raw);
         let rejoined = join_head_body(&head, &body_parts);
         assert_eq!(rejoined, raw);
+    }
+
+    #[test]
+    fn respond_helpers_emit_expected_bytes() {
+        #[derive(Default)]
+        struct MockWrite {
+            data: Vec<u8>,
+        }
+
+        impl AsyncWrite for MockWrite {
+            fn poll_write(
+                mut self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+                buf: &[u8],
+            ) -> std::task::Poll<std::io::Result<usize>> {
+                self.data.extend_from_slice(buf);
+                std::task::Poll::Ready(Ok(buf.len()))
+            }
+
+            fn poll_flush(
+                self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                std::task::Poll::Ready(Ok(()))
+            }
+
+            fn poll_shutdown(
+                self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<std::io::Result<()>> {
+                std::task::Poll::Ready(Ok(()))
+            }
+        }
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let mut writer = MockWrite::default();
+        rt.block_on(respond_with_internal_error(&mut writer))
+            .expect("write should succeed");
+        assert!(std::str::from_utf8(&writer.data)
+            .unwrap()
+            .starts_with("HTTP/1.1 500"));
+
+        let mut buffer = Vec::new();
+        set_http_header(&mut buffer, "Content-Length", "0");
+        // header insertion on non-http-like buffer should keep it empty
+        assert!(buffer.is_empty());
     }
 }
