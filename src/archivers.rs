@@ -199,17 +199,46 @@ impl ArchiverUtil {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::{Format, HexStringOrBuffer};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::sync::Mutex;
+    use tokio::time::timeout;
 
-    fn sample_crypto() -> Arc<ShardusCrypto> {
+    static CACHE_LOCK: Mutex<()> = Mutex::const_new(());
+
+    fn base_crypto() -> Arc<ShardusCrypto> {
         Arc::new(ShardusCrypto::new(
             "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
         ))
     }
 
-    fn sample_config() -> config::Config {
+    fn signing_material() -> (
+        sodiumoxide::crypto::sign::PublicKey,
+        sodiumoxide::crypto::sign::SecretKey,
+        ShardusCrypto,
+    ) {
+        let crypto = ShardusCrypto::new(
+            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
+        );
+        let sk = sodiumoxide::crypto::sign::SecretKey::from_slice(
+            &sodiumoxide::hex::decode(
+                "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d",
+            )
+            .unwrap(),
+        )
+        .expect("Invalid secret key");
+        let pk = sk.public_key();
+        (pk, sk, crypto)
+    }
+
+    fn test_config(standalone: bool) -> config::Config {
         config::Config {
             http_port: 0,
             crypto_seed:
@@ -220,8 +249,8 @@ mod tests {
             max_http_timeout_ms: 1_000,
             tcp_keepalive_time_sec: 1,
             standalone_network: config::StandaloneNetworkConfig {
-                replacement_ip: "127.0.0.1".into(),
-                enabled: false,
+                replacement_ip: "10.0.0.1".into(),
+                enabled: standalone,
             },
             node_filtering: config::NodeFilteringConfig {
                 enabled: false,
@@ -241,7 +270,7 @@ mod tests {
                 https: false,
             },
             local_source: config::LocalSource {
-                collector_api_ip: String::new(),
+                collector_api_ip: "127.0.0.1".into(),
                 collector_api_port: 0,
                 collector_event_server_ip: String::new(),
                 collector_event_server_port: 0,
@@ -253,22 +282,160 @@ mod tests {
         }
     }
 
+    fn sign_payload(
+        crypto: &ShardusCrypto,
+        active_archivers: &[Archiver],
+        sk: &sodiumoxide::crypto::sign::SecretKey,
+        pk: &sodiumoxide::crypto::sign::PublicKey,
+    ) -> Signature {
+        let unsigned_msg = serde_json::json!({
+            "activeArchivers": active_archivers,
+        });
+        let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), Format::Hex);
+        let sig = crypto
+            .sign(HexStringOrBuffer::Hex(hash.to_string()), sk)
+            .expect("signature should succeed");
+
+        Signature {
+            owner: sodiumoxide::hex::encode(pk.as_ref()),
+            sig: sodiumoxide::hex::encode(sig),
+        }
+    }
+
+    async fn spawn_mock_archiver(body: String) -> (u16, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener should bind");
+        let port = listener.local_addr().unwrap().port();
+        let response = format!(
+            "HTTP/1.1 200 OK
+Content-Length: {}
+Connection: close
+
+{}",
+            body.as_bytes().len(),
+            body
+        );
+
+        let handle = tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buffer = [0u8; 1024];
+                let _ = stream.read(&mut buffer).await;
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn discover_updates_active_list_and_cache() {
+        let _cache_guard = CACHE_LOCK.lock().await;
+        let _ = tokio::fs::remove_file("known_archiver_cache.json").await;
+
+        let (pk, sk, crypto) = signing_material();
+        let config = test_config(true);
+
+        let returned_archiver = Archiver {
+            publicKey: "returned_pk".into(),
+            port: 9000,
+            ip: "127.0.0.1".into(),
+        };
+        let body = serde_json::to_string(&SignedArchiverListResponse {
+            activeArchivers: vec![returned_archiver.clone()],
+            sign: sign_payload(&crypto, &[returned_archiver.clone()], &sk, &pk),
+        })
+        .unwrap();
+
+        let (port, server) = spawn_mock_archiver(body).await;
+        let seed_archiver = Archiver {
+            publicKey: "seed_pk".into(),
+            port,
+            ip: "127.0.0.1".into(),
+        };
+
+        let util = Arc::new(ArchiverUtil::new(Arc::new(crypto), vec![seed_archiver], config));
+
+        timeout(Duration::from_secs(3), util.clone().discover())
+            .await
+            .expect("discover should complete");
+        server.await.unwrap();
+
+        let active = util.get_active_archivers();
+        let guard = active.read().await;
+        assert_eq!(guard.len(), 1);
+        assert_eq!(guard[0].publicKey, "returned_pk");
+        assert_eq!(guard[0].ip, "10.0.0.1");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let cache_contents = tokio::fs::read_to_string("known_archiver_cache.json")
+            .await
+            .expect("cache file should be written");
+        let cached: Vec<Archiver> = serde_json::from_str(&cache_contents).unwrap();
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached[0].ip, "10.0.0.1");
+    }
+
+    #[tokio::test]
+    async fn discover_ignores_invalid_signatures() {
+        let _cache_guard = CACHE_LOCK.lock().await;
+        let _ = tokio::fs::remove_file("known_archiver_cache.json").await;
+
+        let (_, _, crypto) = signing_material();
+        let config = test_config(false);
+
+        let bad_signature_response = serde_json::to_string(&SignedArchiverListResponse {
+            activeArchivers: vec![Archiver {
+                publicKey: "returned_pk".into(),
+                port: 9000,
+                ip: "127.0.0.1".into(),
+            }],
+            sign: Signature {
+                owner: "00".into(),
+                sig: "01".into(),
+            },
+        })
+        .unwrap();
+
+        let (port, server) = spawn_mock_archiver(bad_signature_response).await;
+        let seed_archiver = Archiver {
+            publicKey: "seed_pk".into(),
+            port,
+            ip: "127.0.0.1".into(),
+        };
+
+        let util = Arc::new(ArchiverUtil::new(Arc::new(crypto), vec![seed_archiver], config));
+
+        timeout(Duration::from_secs(3), util.clone().discover())
+            .await
+            .expect("discover should complete");
+        server.await.unwrap();
+
+        let active = util.get_active_archivers();
+        let guard = active.read().await;
+        assert!(guard.is_empty());
+        assert!(!std::path::Path::new("known_archiver_cache.json").exists());
+    }
+
     #[test]
     fn verify_signature_roundtrip() {
-        let crypto = sample_crypto();
+        let crypto = base_crypto();
         let archivers = vec![Archiver {
             publicKey: "pk".into(),
             port: 80,
             ip: "127.0.0.1".into(),
         }];
 
-        let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), sample_config());
+        let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(false));
 
         let unsigned_msg = serde_json::json!({"activeArchivers": archivers});
         let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
 
         let kp = crypto.get_key_pair_using_sk(&crate::crypto::HexStringOrBuffer::Hex(
-            "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d".into(),
+            "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
+                .into(),
         ));
 
         let signed = crypto
@@ -288,23 +455,24 @@ mod tests {
 
     #[test]
     fn verify_signature_rejects_invalid() {
-        let crypto = sample_crypto();
+        let crypto = base_crypto();
         let archivers = vec![Archiver {
             publicKey: "pk".into(),
             port: 80,
             ip: "127.0.0.1".into(),
         }];
-        let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), sample_config());
+        let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(false));
 
         let unsigned_msg = serde_json::json!({"activeArchivers": archivers});
         let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
         let kp = crypto.get_key_pair_using_sk(&crate::crypto::HexStringOrBuffer::Hex(
-            "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d".into(),
+            "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
+                .into(),
         ));
         let mut signed = crypto
             .sign(hash, &kp.secret_key)
             .expect("sign should succeed");
-        signed[0] ^= 0xFF; // corrupt signature bytes
+        signed[0] ^= 0xFF;
 
         let payload = SignedArchiverListResponse {
             activeArchivers: archivers,
