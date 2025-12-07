@@ -218,18 +218,14 @@
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a></pre></div><pre class="rust"><code><span class="comment">// src/notifier.rs
-</span><span class="kw">use </span><span class="kw">crate</span>::config::Config;
-<span class="kw">use </span><span class="kw">crate</span>::http;
+<a href="#220" id="220">220</a></pre></div><pre class="rust"><code><span class="comment">// src/notifier.rs
+</span><span class="kw">use </span><span class="kw">crate</span>::http;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-<span class="kw">use </span>tokio::net::TcpStream;
-<span class="kw">use </span>tokio::time::timeout;
 <span class="kw">use </span>tokio::time::Duration;
+<span class="kw">use </span>tokio::time::timeout;
+<span class="kw">use </span>tokio::net::TcpStream;
+<span class="kw">use </span><span class="kw">crate</span>::config::Config;
 
 <span class="kw">pub async fn </span>handle_request&lt;S&gt;(
     <span class="kw-2">mut </span>request_buffer: Vec&lt;u8&gt;,
@@ -337,7 +333,7 @@
         <span class="kw">return </span><span class="prelude-val">Err</span>(Box::new(e));
     }
 
-    <span class="prelude-val">Ok</span>(())
+    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
 }
 
 <span class="kw">pub fn </span>is_notifier_route(route: <span class="kw-2">&amp;</span>str) -&gt; bool {
@@ -351,10 +347,7 @@
     <span class="kw">use </span>tokio::io::AsyncReadExt;
     <span class="kw">use </span>tokio::net::TcpListener;
 
-    <span class="kw">use </span><span class="kw">crate</span>::config::{
-        Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig,
-        StandaloneNetworkConfig, TLSConfig,
-    };
+    <span class="kw">use </span><span class="kw">crate</span>::config::{Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig, StandaloneNetworkConfig, TLSConfig};
 
     <span class="kw">fn </span>test_config(port: u16) -&gt; Config {
         Config {
@@ -432,8 +425,7 @@
 
     <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>, worker_threads = <span class="number">1</span>)]
     </span><span class="kw">async fn </span>test_notifier_get_request() {
-        <span class="kw">let </span>buffer =
-            <span class="string">b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>.to_vec();
+        <span class="kw">let </span>buffer = <span class="string">b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n"</span>.to_vec();
         <span class="kw">let </span>response = run_request(buffer).<span class="kw">await</span>;
         <span class="macro">assert!</span>(String::from_utf8_lossy(<span class="kw-2">&amp;</span>response).starts_with(<span class="string">"HTTP/1.1 200"</span>));
     }
@@ -445,5 +437,4 @@
         <span class="kw">let </span>response = run_request(buffer).<span class="kw">await</span>;
         <span class="macro">assert!</span>(String::from_utf8_lossy(<span class="kw-2">&amp;</span>response).starts_with(<span class="string">"HTTP/1.1 200"</span>));
     }
-}
-</code></pre></div></section></main></body></html>
+}</code></pre></div></section></main></body></html>

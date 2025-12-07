@@ -150,8 +150,7 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#152" id="152">152</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -229,34 +228,6 @@
     }
 }
 
-<span class="kw">pub async fn </span>handle(
-    request: <span class="kw">crate</span>::ws::WebsocketIncoming,
-    subscription_manager: Arc&lt;subscription::Manager&gt;,
-    transmitter: tokio::sync::mpsc::UnboundedSender&lt;RpcResponse&gt;,
-    socket_id: SocketId,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
-    <span class="kw">let </span>resp = <span class="kw">match </span>request.method {
-        Methods::ChatEvent =&gt; {
-            subscription::rpc_handler::handle_subscriptions(
-                request,
-                subscription_manager,
-                socket_id,
-            )
-            .<span class="kw">await
-        </span>}
-        Methods::GetSubscriptions =&gt; {
-            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).<span class="kw">await
-        </span>}
-    };
-
-    transmitter.send(resp).map_err(|e| {
-        <span class="macro">eprintln!</span>(<span class="string">"Failed to send response: {}"</span>, e);
-        std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to send response"</span>)
-    })<span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(())
-}
-
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -297,11 +268,38 @@
         <span class="macro">assert!</span>(ok.error.is_none());
         <span class="macro">assert_eq!</span>(ok.result.unwrap()[<span class="string">"ok"</span>], <span class="bool-val">true</span>);
 
-        <span class="kw">let </span>err =
-            generate_error_response(<span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="string">"bad"</span>.into(), RpcErrorCode::InternalError <span class="kw">as </span>i32);
+        <span class="kw">let </span>err = generate_error_response(<span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="string">"bad"</span>.into(), RpcErrorCode::InternalError <span class="kw">as </span>i32);
         <span class="macro">assert_eq!</span>(err.id, <span class="prelude-val">Some</span>(<span class="number">2</span>));
         <span class="macro">assert!</span>(err.result.is_none());
         <span class="macro">assert_eq!</span>(err.error.unwrap().code, RpcErrorCode::InternalError <span class="kw">as </span>i32);
     }
+}
+
+<span class="kw">pub async fn </span>handle(
+    request: <span class="kw">crate</span>::ws::WebsocketIncoming,
+    subscription_manager: Arc&lt;subscription::Manager&gt;,
+    transmitter: tokio::sync::mpsc::UnboundedSender&lt;RpcResponse&gt;,
+    socket_id: SocketId,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), Box&lt;<span class="kw">dyn </span>std::error::Error&gt;&gt; {
+    <span class="kw">let </span>resp = <span class="kw">match </span>request.method {
+        Methods::ChatEvent =&gt; {
+            subscription::rpc_handler::handle_subscriptions(
+                request,
+                subscription_manager,
+                socket_id,
+            )
+            .<span class="kw">await
+        </span>}
+        Methods::GetSubscriptions =&gt; {
+            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).<span class="kw">await
+        </span>}
+    };
+
+    transmitter.send(resp).map_err(|e| {
+        <span class="macro">eprintln!</span>(<span class="string">"Failed to send response: {}"</span>, e);
+        std::io::Error::new(std::io::ErrorKind::Other, <span class="string">"Failed to send response"</span>)
+    })<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div></section></main></body></html>

@@ -485,15 +485,7 @@
 <a href="#484" id="484">484</a>
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
+<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
 //!
 //! This module provides functionality for managing and discovering archivers in the network.
 //! It includes methods for loading archivers, verifying their authenticity, and maintaining
@@ -501,15 +493,14 @@
 //! allowing seamless integration in a highly concurrent environment.
 </span><span class="kw">use </span><span class="kw">crate</span>::config;
 <span class="kw">use </span><span class="kw">crate</span>::crypto::ShardusCrypto;
-<span class="kw">use </span><span class="kw">crate</span>::swap_cell::SwapCell;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>tokio::io::AsyncWriteExt;
+<span class="kw">use </span>tokio::{io::AsyncWriteExt, sync::RwLock};
 
 <span class="kw">pub struct </span>ArchiverUtil {
     config: config::Config,
-    seed_list: Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt;,
-    active_archivers: Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    seed_list: Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    active_archivers: Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt;,
     crypto: Arc&lt;ShardusCrypto&gt;,
 }
 
@@ -534,8 +525,8 @@
 <span class="attr">#[allow(non_snake_case)]
 #[derive(serde::Deserialize, serde::Serialize)]
 </span><span class="kw">pub struct </span>SignedArchiverListResponse {
-    <span class="kw">pub </span>activeArchivers: Vec&lt;Archiver&gt;,
-    <span class="kw">pub </span>sign: Signature,
+    activeArchivers: Vec&lt;Archiver&gt;,
+    sign: Signature,
 }
 
 <span class="attr">#[derive(serde::Deserialize, serde::Serialize)]
@@ -552,8 +543,8 @@
 
         ArchiverUtil {
             config,
-            seed_list: Arc::new(SwapCell::new(seed)),
-            active_archivers: Arc::new(SwapCell::new(Vec::new())),
+            seed_list: Arc::new(RwLock::new(seed)),
+            active_archivers: Arc::new(RwLock::new(Vec::new())),
             crypto: sc,
         }
     }
@@ -579,7 +570,7 @@
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Vec::new(),
         };
 
-        cache.extend(<span class="self">self</span>.seed_list.get_latest().as_ref().clone());
+        cache.extend(<span class="self">self</span>.seed_list.read().<span class="kw">await</span>.clone());
         cache.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) =
@@ -650,7 +641,11 @@
 
         <span class="kw">let </span>dump = tmp.clone();
 
-        long_lived_self.active_archivers.publish(tmp);
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = long_lived_self.active_archivers.write().<span class="kw">await</span>;
+            <span class="kw-2">*</span>guard = tmp;
+            drop(guard);
+        }
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>file = tokio::fs::File::create(<span class="string">"known_archiver_cache.json"</span>)
@@ -662,7 +657,7 @@
     }
 
     <span class="doccomment">/// Returns the reference counted clone of active archivers list.
-    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt; {
+    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt; {
         <span class="self">self</span>.active_archivers.clone()
     }
 
@@ -691,6 +686,7 @@
     }
 }
 
+
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -715,8 +711,9 @@
         sodiumoxide::crypto::sign::SecretKey,
         ShardusCrypto,
     ) {
-        <span class="kw">let </span>crypto =
-            ShardusCrypto::new(<span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>);
+        <span class="kw">let </span>crypto = ShardusCrypto::new(
+            <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>,
+        );
         <span class="kw">let </span>sk = sodiumoxide::crypto::sign::SecretKey::from_slice(
             <span class="kw-2">&amp;</span>sodiumoxide::hex::decode(
                 <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"</span>,
@@ -731,7 +728,8 @@
     <span class="kw">fn </span>test_config(standalone: bool) -&gt; config::Config {
         config::Config {
             http_port: <span class="number">0</span>,
-            crypto_seed: <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>.into(),
+            crypto_seed:
+                <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>.into(),
             archiver_seed_path: String::new(),
             nodelist_refresh_interval_sec: <span class="number">1</span>,
             debug: <span class="bool-val">true</span>,
@@ -844,11 +842,7 @@ Connection: close
             ip: <span class="string">"127.0.0.1"</span>.into(),
         };
 
-        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(
-            Arc::new(crypto),
-            <span class="macro">vec!</span>[seed_archiver],
-            config,
-        ));
+        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(Arc::new(crypto), <span class="macro">vec!</span>[seed_archiver], config));
 
         timeout(Duration::from_secs(<span class="number">3</span>), util.clone().discover())
             .<span class="kw">await
@@ -856,7 +850,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.get_latest();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(guard.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].publicKey, <span class="string">"returned_pk"</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].ip, <span class="string">"10.0.0.1"</span>);
@@ -899,11 +893,7 @@ Connection: close
             ip: <span class="string">"127.0.0.1"</span>.into(),
         };
 
-        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(
-            Arc::new(crypto),
-            <span class="macro">vec!</span>[seed_archiver],
-            config,
-        ));
+        <span class="kw">let </span>util = Arc::new(ArchiverUtil::new(Arc::new(crypto), <span class="macro">vec!</span>[seed_archiver], config));
 
         timeout(Duration::from_secs(<span class="number">3</span>), util.clone().discover())
             .<span class="kw">await
@@ -911,7 +901,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.get_latest();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
         <span class="macro">assert!</span>(guard.is_empty());
         <span class="macro">assert!</span>(!std::path::Path::new(<span class="string">"known_archiver_cache.json"</span>).exists());
     }
@@ -928,10 +918,7 @@ Connection: close
         <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(<span class="bool-val">false</span>));
 
         <span class="kw">let </span>unsigned_msg = <span class="macro">serde_json::json!</span>({<span class="string">"activeArchivers"</span>: archivers});
-        <span class="kw">let </span>hash = crypto.hash(
-            <span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(),
-            <span class="kw">crate</span>::crypto::Format::Hex,
-        );
+        <span class="kw">let </span>hash = crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), <span class="kw">crate</span>::crypto::Format::Hex);
 
         <span class="kw">let </span>kp = crypto.get_key_pair_using_sk(<span class="kw-2">&amp;</span><span class="kw">crate</span>::crypto::HexStringOrBuffer::Hex(
             <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
@@ -964,10 +951,7 @@ Connection: close
         <span class="kw">let </span>util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(<span class="bool-val">false</span>));
 
         <span class="kw">let </span>unsigned_msg = <span class="macro">serde_json::json!</span>({<span class="string">"activeArchivers"</span>: archivers});
-        <span class="kw">let </span>hash = crypto.hash(
-            <span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(),
-            <span class="kw">crate</span>::crypto::Format::Hex,
-        );
+        <span class="kw">let </span>hash = crypto.hash(<span class="kw-2">&amp;</span>unsigned_msg.to_string().into_bytes(), <span class="kw">crate</span>::crypto::Format::Hex);
         <span class="kw">let </span>kp = crypto.get_key_pair_using_sk(<span class="kw-2">&amp;</span><span class="kw">crate</span>::crypto::HexStringOrBuffer::Hex(
             <span class="string">"c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
                 </span>.into(),

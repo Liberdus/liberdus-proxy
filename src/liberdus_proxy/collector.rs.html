@@ -527,7 +527,12 @@
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module provides utilities to interact with a transaction collector API.
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module provides utilities to interact with a transaction collector API.
 //!
 //! The module includes:
 //! - Fetching a specific transaction by its ID.
@@ -766,6 +771,124 @@
     obj
 }
 
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
+    <span class="kw">use </span>tokio::net::TcpListener;
+
+    <span class="kw">async fn </span>spawn_http_server(body: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; (u16, tokio::task::JoinHandle&lt;()&gt;) {
+        <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:0"</span>).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>port = listener.local_addr().unwrap().port();
+        <span class="kw">let </span>response = <span class="macro">format!</span>(
+            <span class="string">"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}"</span>,
+            body.len(), body
+        );
+
+        <span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>((<span class="kw-2">mut </span>socket, <span class="kw">_</span>)) = listener.accept().<span class="kw">await </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">1024</span>];
+                <span class="kw">let _ </span>= socket.read(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span>;
+                <span class="kw">let _ </span>= socket.write_all(response.as_bytes()).<span class="kw">await</span>;
+                <span class="kw">let _ </span>= socket.shutdown().<span class="kw">await</span>;
+            }
+        });
+
+        (port, handle)
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>inserts_transaction_ids_when_present() {
+        <span class="kw">let </span>(port, server) = spawn_http_server(
+            <span class="string">r#"{"success":true,"transactions":[{"originalTxData":{"tx":{"k":1}},"txId":"abc"}]}"#</span>,
+        )
+        .<span class="kw">await</span>;
+
+        <span class="kw">let </span>value = get_transaction_history(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"acct"</span>.to_string())
+            .<span class="kw">await
+            </span>.unwrap();
+
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert_eq!</span>(
+            value,
+            <span class="macro">serde_json::json!</span>({<span class="string">"transactions"</span>:[{<span class="string">"k"</span>:<span class="number">1</span>,<span class="string">"txId"</span>:<span class="string">"abc"</span>}]}),
+            <span class="string">"transaction IDs should be merged into response objects"
+        </span>);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>returns_error_on_failure_response() {
+        <span class="kw">let </span>(port, server) =
+            spawn_http_server(<span class="string">r#"{"success":false,"error":"nope","transactions":[]}"#</span>).<span class="kw">await</span>;
+
+        <span class="kw">let </span>err =
+            get_transaction_history(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"acct"</span>.to_string())
+                .<span class="kw">await
+                </span>.unwrap_err();
+
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert_eq!</span>(err, <span class="string">"nope"</span>);
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>get_transaction_handles_missing() {
+        <span class="kw">let </span>(port, server) = spawn_http_server(
+            <span class="string">r#"{"success":false,"error":"not found","transactions":[]}"#</span>,
+        )
+        .<span class="kw">await</span>;
+
+        <span class="kw">let </span>tx = get_transaction(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"id"</span>.to_string()).<span class="kw">await</span>;
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert!</span>(tx.is_none());
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>get_account_by_address_success() {
+        <span class="kw">let </span>(port, server) = spawn_http_server(
+            <span class="string">r#"{"accounts":[{"data":{"account":"ok"}}]}"#</span>,
+        )
+        .<span class="kw">await</span>;
+
+        <span class="kw">let </span>value = get_account_by_address(<span class="string">"127.0.0.1"</span>, <span class="kw-2">&amp;</span>port.to_string(), <span class="string">"acct"</span>)
+            .<span class="kw">await
+            </span>.unwrap();
+
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert_eq!</span>(value, <span class="macro">serde_json::json!</span>({<span class="string">"account"</span>:<span class="string">"ok"</span>}));
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>get_account_by_address_missing() {
+        <span class="kw">let </span>(port, server) = spawn_http_server(<span class="string">r#"{"accounts":[]}"#</span>).<span class="kw">await</span>;
+
+        <span class="kw">let </span>err = get_account_by_address(<span class="string">"127.0.0.1"</span>, <span class="kw-2">&amp;</span>port.to_string(), <span class="string">"acct"</span>)
+            .<span class="kw">await
+            </span>.unwrap_err();
+
+        server.<span class="kw">await</span>.unwrap();
+
+        <span class="macro">assert_eq!</span>(err, <span class="string">"Account not found"</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>insert_field_merges_keys() {
+        <span class="kw">let </span>base = <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>:<span class="number">1</span>});
+        <span class="kw">let </span>updated = insert_field(base, <span class="string">"b"</span>, <span class="macro">serde_json::json!</span>(<span class="number">2</span>));
+        <span class="macro">assert_eq!</span>(updated[<span class="string">"a"</span>], <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(updated[<span class="string">"b"</span>], <span class="number">2</span>);
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>collector_route_recognizer() {
+        <span class="macro">assert!</span>(is_collector_route(<span class="string">"/collector/foo"</span>));
+        <span class="macro">assert!</span>(!is_collector_route(<span class="string">"/other"</span>));
+    }
+}
+
 <span class="kw">use </span>std::{sync::Arc, time::Duration};
 
 <span class="kw">use </span>futures::StreamExt;
@@ -942,118 +1065,5 @@
 
 <span class="kw">pub fn </span>is_collector_route(route: <span class="kw-2">&amp;</span>str) -&gt; bool {
     route.starts_with(<span class="string">"/collector"</span>)
-}
-
-<span class="attr">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
-    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
-    <span class="kw">use </span>tokio::net::TcpListener;
-
-    <span class="kw">async fn </span>spawn_http_server(body: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; (u16, tokio::task::JoinHandle&lt;()&gt;) {
-        <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:0"</span>).<span class="kw">await</span>.unwrap();
-        <span class="kw">let </span>port = listener.local_addr().unwrap().port();
-        <span class="kw">let </span>response = <span class="macro">format!</span>(
-            <span class="string">"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}"</span>,
-            body.len(),
-            body
-        );
-
-        <span class="kw">let </span>handle = tokio::spawn(<span class="kw">async move </span>{
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>((<span class="kw-2">mut </span>socket, <span class="kw">_</span>)) = listener.accept().<span class="kw">await </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">1024</span>];
-                <span class="kw">let _ </span>= socket.read(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span>;
-                <span class="kw">let _ </span>= socket.write_all(response.as_bytes()).<span class="kw">await</span>;
-                <span class="kw">let _ </span>= socket.shutdown().<span class="kw">await</span>;
-            }
-        });
-
-        (port, handle)
-    }
-
-    <span class="attr">#[tokio::test]
-    </span><span class="kw">async fn </span>inserts_transaction_ids_when_present() {
-        <span class="kw">let </span>(port, server) = spawn_http_server(
-            <span class="string">r#"{"success":true,"transactions":[{"originalTxData":{"tx":{"k":1}},"txId":"abc"}]}"#</span>,
-        )
-        .<span class="kw">await</span>;
-
-        <span class="kw">let </span>value = get_transaction_history(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"acct"</span>.to_string())
-            .<span class="kw">await
-            </span>.unwrap();
-
-        server.<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert_eq!</span>(
-            value,
-            <span class="macro">serde_json::json!</span>({<span class="string">"transactions"</span>:[{<span class="string">"k"</span>:<span class="number">1</span>,<span class="string">"txId"</span>:<span class="string">"abc"</span>}]}),
-            <span class="string">"transaction IDs should be merged into response objects"
-        </span>);
-    }
-
-    <span class="attr">#[tokio::test]
-    </span><span class="kw">async fn </span>returns_error_on_failure_response() {
-        <span class="kw">let </span>(port, server) =
-            spawn_http_server(<span class="string">r#"{"success":false,"error":"nope","transactions":[]}"#</span>).<span class="kw">await</span>;
-
-        <span class="kw">let </span>err = get_transaction_history(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"acct"</span>.to_string())
-            .<span class="kw">await
-            </span>.unwrap_err();
-
-        server.<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert_eq!</span>(err, <span class="string">"nope"</span>);
-    }
-
-    <span class="attr">#[tokio::test]
-    </span><span class="kw">async fn </span>get_transaction_handles_missing() {
-        <span class="kw">let </span>(port, server) =
-            spawn_http_server(<span class="string">r#"{"success":false,"error":"not found","transactions":[]}"#</span>).<span class="kw">await</span>;
-
-        <span class="kw">let </span>tx = get_transaction(<span class="kw-2">&amp;</span><span class="string">"127.0.0.1"</span>.to_string(), <span class="kw-2">&amp;</span>port, <span class="kw-2">&amp;</span><span class="string">"id"</span>.to_string()).<span class="kw">await</span>;
-        server.<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert!</span>(tx.is_none());
-    }
-
-    <span class="attr">#[tokio::test]
-    </span><span class="kw">async fn </span>get_account_by_address_success() {
-        <span class="kw">let </span>(port, server) = spawn_http_server(<span class="string">r#"{"accounts":[{"data":{"account":"ok"}}]}"#</span>).<span class="kw">await</span>;
-
-        <span class="kw">let </span>value = get_account_by_address(<span class="string">"127.0.0.1"</span>, <span class="kw-2">&amp;</span>port.to_string(), <span class="string">"acct"</span>)
-            .<span class="kw">await
-            </span>.unwrap();
-
-        server.<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert_eq!</span>(value, <span class="macro">serde_json::json!</span>({<span class="string">"account"</span>:<span class="string">"ok"</span>}));
-    }
-
-    <span class="attr">#[tokio::test]
-    </span><span class="kw">async fn </span>get_account_by_address_missing() {
-        <span class="kw">let </span>(port, server) = spawn_http_server(<span class="string">r#"{"accounts":[]}"#</span>).<span class="kw">await</span>;
-
-        <span class="kw">let </span>err = get_account_by_address(<span class="string">"127.0.0.1"</span>, <span class="kw-2">&amp;</span>port.to_string(), <span class="string">"acct"</span>)
-            .<span class="kw">await
-            </span>.unwrap_err();
-
-        server.<span class="kw">await</span>.unwrap();
-
-        <span class="macro">assert_eq!</span>(err, <span class="string">"Account not found"</span>);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>insert_field_merges_keys() {
-        <span class="kw">let </span>base = <span class="macro">serde_json::json!</span>({<span class="string">"a"</span>:<span class="number">1</span>});
-        <span class="kw">let </span>updated = insert_field(base, <span class="string">"b"</span>, <span class="macro">serde_json::json!</span>(<span class="number">2</span>));
-        <span class="macro">assert_eq!</span>(updated[<span class="string">"a"</span>], <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(updated[<span class="string">"b"</span>], <span class="number">2</span>);
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>collector_route_recognizer() {
-        <span class="macro">assert!</span>(is_collector_route(<span class="string">"/collector/foo"</span>));
-        <span class="macro">assert!</span>(!is_collector_route(<span class="string">"/other"</span>));
-    }
 }
 </code></pre></div></section></main></body></html>
