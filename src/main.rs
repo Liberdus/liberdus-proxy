@@ -36,30 +36,18 @@
 //! ```bash
 //! cargo run
 //! ```
-mod archivers;
-mod collector;
-mod notifier;
-mod config;
-mod crypto;
-mod http;
-mod liberdus;
-mod rpc;
-mod shardus_monitor;
-mod subscription;
-mod tls;
-mod ws;
-
 use std::collections::HashMap;
 use std::fs;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_rustls::TlsAcceptor;
-use liberdus_proxy::Stats;
+
+use liberdus_proxy::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _configs = config::Config::load().unwrap_or_else(|err| {
+    let _configs = Config::load().unwrap_or_else(|err| {
         eprintln!("Failed to load config: {}", err);
         std::process::exit(1);
     });
@@ -127,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Waiting for active nodelist...");
     loop {
-        if lbd.active_nodelist.read().await.len() > 0 {
+        if lbd.active_nodelist.get_latest().len() > 0 {
             break;
         }
     }
@@ -141,8 +129,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _stats = Arc::clone(&server_stats);
 
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(1));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(500));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
         loop {
             ticker.tick().await;

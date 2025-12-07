@@ -509,14 +509,14 @@ pub fn strip_route_root(header_bytes: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ws::SocketIdents;
+    use crate::{swap_cell::SwapCell, ws::SocketIdents};
     use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
     use tokio::sync::RwLock;
 
     fn test_liberdus() -> Arc<liberdus::Liberdus> {
         let cfg = config::Config::load().expect("config should load");
         let sc = Arc::new(crate::crypto::ShardusCrypto::new(&cfg.crypto_seed));
-        let archivers = Arc::new(tokio::sync::RwLock::new(Vec::<crate::archivers::Archiver>::new()));
+        let archivers = Arc::new(SwapCell::new(Vec::<crate::archivers::Archiver>::new()));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 

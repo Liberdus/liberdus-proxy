@@ -332,14 +332,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{archivers, config, crypto};
+    use crate::{archivers, config, crypto, swap_cell::SwapCell};
     use tokio::net::TcpListener;
     use tokio_tungstenite::tungstenite::protocol::Message;
 
     fn test_liberdus() -> Arc<liberdus::Liberdus> {
         let cfg = config::Config::load().expect("config should load");
         let sc = Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed));
-        let archivers = Arc::new(tokio::sync::RwLock::new(Vec::<archivers::Archiver>::new()));
+        let archivers = Arc::new(SwapCell::new(Vec::<archivers::Archiver>::new()));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 
