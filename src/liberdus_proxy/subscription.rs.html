@@ -482,10 +482,7 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
+<a href="#484" id="484">484</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
@@ -666,7 +663,7 @@
         <span class="kw">let </span>read_guard = <span class="self">self</span>.states.read().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>all_subscriptions = Vec::new();
 
-        <span class="kw">for </span>(account, <span class="kw">_</span>) <span class="kw">in </span><span class="kw-2">&amp;</span>read_guard.socks_by_account {
+        <span class="kw">for </span>account <span class="kw">in </span>read_guard.socks_by_account.keys() {
             all_subscriptions.push(account.clone());
         }
         drop(read_guard);
@@ -691,9 +688,7 @@
             .entry(account.to_string())
             .or_default()
             .insert(socket_id.clone());
-        guard
-            .last_received
-            .insert(account.to_string(), timestamp);
+        guard.last_received.insert(account.to_string(), timestamp);
     }
 }
 
@@ -704,9 +699,9 @@
     <span class="attr">#[serde(deserialize_with = <span class="string">"deserialize_stringified_account_update"</span>)]
     </span>data: AccountUpdate,
 }
-    <span class="kw">fn </span>deserialize_stringified_account_update&lt;<span class="lifetime">'de</span>, D&gt;(
-        deserializer: D,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;AccountUpdate, D::Error&gt;
+<span class="kw">fn </span>deserialize_stringified_account_update&lt;<span class="lifetime">'de</span>, D&gt;(
+    deserializer: D,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AccountUpdate, D::Error&gt;
 <span class="kw">where
     </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
 {
@@ -824,7 +819,7 @@
         <span class="kw">match </span>req.params[<span class="number">0</span>].as_str().unwrap_or(<span class="string">""</span>).into() {
             <span class="kw">super</span>::SubscriptionActions::Subscribe =&gt; {
                 <span class="kw">let _ </span>= subscription_manager
-                    .subscribe(<span class="kw-2">&amp;</span>socket_id, req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into())
+                    .subscribe(<span class="kw-2">&amp;</span>socket_id, req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>))
                     .<span class="kw">await</span>;
 
                 rpc::generate_success_response(
@@ -838,7 +833,7 @@
             }
             <span class="kw">super</span>::SubscriptionActions::Unsubscribe =&gt; {
                 <span class="kw">let </span>status = subscription_manager
-                    .unsubscribe(<span class="kw-2">&amp;</span>socket_id, req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>).into())
+                    .unsubscribe(<span class="kw-2">&amp;</span>socket_id, req.params[<span class="number">1</span>].as_str().unwrap_or(<span class="string">""</span>))
                     .<span class="kw">await</span>;
 
                 rpc::generate_success_response(
@@ -871,13 +866,12 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::crypto::ShardusCrypto;
+    <span class="kw">use crate</span>::{crypto::ShardusCrypto, swap_cell::SwapCell};
 
     <span class="kw">fn </span>sample_config() -&gt; <span class="kw">crate</span>::config::Config {
         <span class="kw">crate</span>::config::Config {
             http_port: <span class="number">0</span>,
-            crypto_seed:
-                <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>.into(),
+            crypto_seed: <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>.into(),
             archiver_seed_path: String::new(),
             nodelist_refresh_interval_sec: <span class="number">1</span>,
             debug: <span class="bool-val">false</span>,
@@ -923,7 +917,7 @@
         ));
         <span class="kw">let </span>liberdus = Arc::new(<span class="kw">crate</span>::liberdus::Liberdus::new(
             crypto,
-            Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            Arc::new(SwapCell::new(Vec::new())),
             sample_config(),
         ));
         Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["handle_request","is_old_receipt_route"],"struct":["AccountData","Consensor","GetAccountResp","Liberdus","Signature","UserAccount"]};
+window.SIDEBAR_ITEMS = {"fn":["handle_request","is_old_receipt_route"],"struct":["AccountData","Consensor","GetAccountResp","Liberdus","Signature","SignedNodeListResp","UserAccount"]};
