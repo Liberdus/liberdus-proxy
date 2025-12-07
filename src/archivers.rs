@@ -204,7 +204,7 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
-    use tokio::sync::{Mutex, RwLock};
+    use tokio::sync::Mutex;
     use tokio::time::timeout;
 
     static CACHE_LOCK: Mutex<()> = Mutex::const_new(());

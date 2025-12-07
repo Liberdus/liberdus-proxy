@@ -11,6 +11,7 @@ const NODELIST_SIZE: usize = 20_000;
 fn generate_test_nodelist(size: usize) -> Vec<Consensor> {
     (0..size)
         .map(|i| Consensor {
+            foundationNode: Some(false),
             id: i.to_string(),
             ip: "127.0.0.1".to_string(),
             port: 8080 + i as u16,

@@ -76,6 +76,34 @@ pub fn generate_error_response(id: Option<u32>, error_msg: String, code: i32) ->
     }
 }
 
+pub async fn handle(
+    request: crate::ws::WebsocketIncoming,
+    subscription_manager: Arc<subscription::Manager>,
+    transmitter: tokio::sync::mpsc::UnboundedSender<RpcResponse>,
+    socket_id: SocketId,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let resp = match request.method {
+        Methods::ChatEvent => {
+            subscription::rpc_handler::handle_subscriptions(
+                request,
+                subscription_manager,
+                socket_id,
+            )
+            .await
+        }
+        Methods::GetSubscriptions => {
+            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).await
+        }
+    };
+
+    transmitter.send(resp).map_err(|e| {
+        eprintln!("Failed to send response: {}", e);
+        std::io::Error::new(std::io::ErrorKind::Other, "Failed to send response")
+    })?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,32 +150,4 @@ mod tests {
         assert!(err.result.is_none());
         assert_eq!(err.error.unwrap().code, RpcErrorCode::InternalError as i32);
     }
-}
-
-pub async fn handle(
-    request: crate::ws::WebsocketIncoming,
-    subscription_manager: Arc<subscription::Manager>,
-    transmitter: tokio::sync::mpsc::UnboundedSender<RpcResponse>,
-    socket_id: SocketId,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let resp = match request.method {
-        Methods::ChatEvent => {
-            subscription::rpc_handler::handle_subscriptions(
-                request,
-                subscription_manager,
-                socket_id,
-            )
-            .await
-        }
-        Methods::GetSubscriptions => {
-            subscription::rpc_handler::get_all_subscriptions(request, subscription_manager).await
-        }
-    };
-
-    transmitter.send(resp).map_err(|e| {
-        eprintln!("Failed to send response: {}", e);
-        std::io::Error::new(std::io::ErrorKind::Other, "Failed to send response")
-    })?;
-
-    Ok(())
 }

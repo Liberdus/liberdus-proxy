@@ -230,7 +230,7 @@ where
                             }
                         };
 
-                        let rpc_id = parsed.id.clone();
+                        let rpc_id = parsed.id;
                         let e = rpc::handle(
                             parsed,
                             subscription_manager_long_lived.clone(),

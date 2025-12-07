@@ -179,7 +179,7 @@ impl Manager {
         let read_guard = self.states.read().await;
         let mut all_subscriptions = Vec::new();
 
-        for (account, _) in &read_guard.socks_by_account {
+        for account in read_guard.socks_by_account.keys() {
             all_subscriptions.push(account.clone());
         }
         drop(read_guard);
@@ -335,7 +335,7 @@ pub mod rpc_handler {
         match req.params[0].as_str().unwrap_or("").into() {
             super::SubscriptionActions::Subscribe => {
                 let _ = subscription_manager
-                    .subscribe(&socket_id, req.params[1].as_str().unwrap_or("").into())
+                    .subscribe(&socket_id, req.params[1].as_str().unwrap_or(""))
                     .await;
 
                 rpc::generate_success_response(
@@ -349,7 +349,7 @@ pub mod rpc_handler {
             }
             super::SubscriptionActions::Unsubscribe => {
                 let status = subscription_manager
-                    .unsubscribe(&socket_id, req.params[1].as_str().unwrap_or("").into())
+                    .unsubscribe(&socket_id, req.params[1].as_str().unwrap_or(""))
                     .await;
 
                 rpc::generate_success_response(
