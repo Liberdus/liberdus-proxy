@@ -516,7 +516,7 @@ mod tests {
     fn test_liberdus() -> Arc<liberdus::Liberdus> {
         let cfg = config::Config::load().expect("config should load");
         let sc = Arc::new(crate::crypto::ShardusCrypto::new(&cfg.crypto_seed));
-        let archivers = Arc::new(tokio::sync::RwLock::new(Vec::<crate::archivers::Archiver>::new()));
+        let archivers = Arc::new(arc_swap::ArcSwap::new(Arc::new(Vec::<crate::archivers::Archiver>::new())));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 

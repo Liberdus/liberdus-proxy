@@ -17,3 +17,4 @@ tokio-tungstenite = { version = "0.26.0", features = ["tokio-rustls"] }
 futures-util = "0.3.31"
 url = "2.5.4"
 futures = "0.3.31"
+arc-swap = "1.6.0"

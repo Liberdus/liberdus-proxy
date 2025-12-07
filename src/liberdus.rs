@@ -1,6 +1,7 @@
 //! This module contains the node management logic require for load balancing with consensor nodes
 use crate::crypto;
 use crate::{archivers, collector, config, http};
+use arc_swap::ArcSwap;
 use rand::prelude::*;
 use serde::{self, Deserialize, Serialize};
 use std::{
@@ -42,9 +43,9 @@ pub struct Signature {
 }
 
 pub struct Liberdus {
-    pub active_nodelist: Arc<RwLock<Vec<Consensor>>>,
+    pub active_nodelist: Arc<ArcSwap<Vec<Consensor>>>,
     trip_ms: Arc<RwLock<HashMap<String, u128>>>,
-    archivers: Arc<RwLock<Vec<archivers::Archiver>>>,
+    archivers: Arc<ArcSwap<Vec<archivers::Archiver>>>,
     round_robin_index: Arc<AtomicUsize>,
     list_prepared: Arc<AtomicBool>,
     crypto: Arc<crypto::ShardusCrypto>,
@@ -55,14 +56,14 @@ pub struct Liberdus {
 impl Liberdus {
     pub fn new(
         sc: Arc<crypto::ShardusCrypto>,
-        archivers: Arc<RwLock<Vec<archivers::Archiver>>>,
+        archivers: Arc<ArcSwap<Vec<archivers::Archiver>>>,
         config: config::Config,
     ) -> Self {
         Liberdus {
             config: Arc::new(config),
             round_robin_index: Arc::new(AtomicUsize::new(0)),
             trip_ms: Arc::new(RwLock::new(HashMap::new())),
-            active_nodelist: Arc::new(RwLock::new(Vec::new())),
+            active_nodelist: Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
             list_prepared: Arc::new(AtomicBool::new(false)),
             archivers,
             crypto: sc,
@@ -72,7 +73,7 @@ impl Liberdus {
 
     /// trigger a full nodelist update from one of the archivers
     pub async fn update_active_nodelist(&self) {
-        let archivers = self.archivers.read().await;
+        let archivers = self.archivers.load();
 
         for archiver in archivers.iter() {
             let url = format!(
@@ -142,10 +143,7 @@ impl Liberdus {
                                  nodelist.len(), self.config.node_filtering.min_nodes_for_filtering);
                     }
 
-                    {
-                        let mut guard = self.active_nodelist.write().await;
-                        *guard = nodelist;
-                    }
+                    self.active_nodelist.store(Arc::new(nodelist));
 
                     self.round_robin_index
                         .store(0, std::sync::atomic::Ordering::Relaxed);
@@ -287,10 +285,7 @@ impl Liberdus {
             return;
         }
 
-        let nodes = {
-            let guard = self.active_nodelist.read().await;
-            guard.clone()
-        };
+        let nodes = self.active_nodelist.load().clone().to_vec();
 
         let trip_ms = {
             let guard = self.trip_ms.read().await;
@@ -316,10 +311,7 @@ impl Liberdus {
             cumulative_bias.push(total_bias);
         }
 
-        {
-            let mut guard = self.active_nodelist.write().await;
-            *guard = sorted_nodes;
-        }
+        self.active_nodelist.store(Arc::new(sorted_nodes));
 
         {
             let mut guard = self.load_distribution_commulative_bias.write().await;
@@ -342,7 +334,7 @@ impl Liberdus {
             return None;
         }
 
-        let nodes = self.active_nodelist.read().await.clone();
+        let nodes = self.active_nodelist.load().clone();
         let cumulative_weights = self.load_distribution_commulative_bias.read().await.clone();
 
         if nodes.is_empty() || cumulative_weights.is_empty() {
@@ -382,7 +374,7 @@ impl Liberdus {
     /// node selection. Subsequent call will be redirected towards the node based on that bias and round robin
     /// is dismissed.
     pub async fn get_next_appropriate_consensor(&self) -> Option<(usize, Consensor)> {
-        if self.active_nodelist.read().await.is_empty() {
+        if self.active_nodelist.load().is_empty() {
             return None;
         }
         match self
@@ -394,7 +386,7 @@ impl Liberdus {
                 .await
                 .clone()
                 .len()
-                == self.active_nodelist.read().await.len())
+                == self.active_nodelist.load().len())
         {
             true => self.get_random_consensor_biased().await,
             false => {
@@ -402,13 +394,8 @@ impl Liberdus {
                     .round_robin_index
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                let nodes = self.active_nodelist.read().await;
+                let nodes = self.active_nodelist.load();
                 if index >= nodes.len() {
-                    // dropping the `nodes` is really important here
-                    // prepare_list() will acquire write lock
-                    // but this scope here has a simultaneous read lock
-                    // this will cause a deadlock if not drop
-                    drop(nodes);
                     self.prepare_list().await;
                     return self.get_random_consensor_biased().await;
                 }
@@ -566,6 +553,7 @@ pub struct AccountData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arc_swap::ArcSwap;
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
@@ -583,7 +571,7 @@ mod tests {
             publicKey: "0x0".to_string(),
         };
 
-        let archivers = Arc::new(RwLock::new(vec![_mock_archiver]));
+        let archivers = Arc::new(ArcSwap::new(Arc::new(vec![_mock_archiver])));
         let liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(
                 "69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc",
@@ -603,7 +591,7 @@ mod tests {
             nodes.push(node);
         }
 
-        liberdus.active_nodelist.write().await.extend(nodes);
+        liberdus.active_nodelist.store(Arc::new(nodes));
 
         liberdus
             .round_robin_index
@@ -689,7 +677,7 @@ mod tests {
         ));
         Liberdus::new(
             crypto,
-            Arc::new(RwLock::new(Vec::new())),
+            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
             sample_config(),
         )
     }
@@ -705,23 +693,22 @@ mod tests {
     #[tokio::test]
     async fn prepare_list_sorts_nodes_by_rtt() {
         let liberdus = sample_liberdus();
-        {
-            let mut nodes = liberdus.active_nodelist.write().await;
-            nodes.push(Consensor {
+        liberdus.active_nodelist.store(Arc::new(vec![
+            Consensor {
                 id: "slow".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
                 publicKey: "pk1".into(),
                 rng_bias: None,
-            });
-            nodes.push(Consensor {
+            },
+            Consensor {
                 id: "fast".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
                 publicKey: "pk2".into(),
                 rng_bias: None,
-            });
-        }
+            },
+        ]));
 
         {
             let mut trips = liberdus.trip_ms.write().await;
@@ -731,7 +718,7 @@ mod tests {
 
         liberdus.prepare_list().await;
 
-        let ordered = liberdus.active_nodelist.read().await.clone();
+        let ordered = liberdus.active_nodelist.load();
         assert_eq!(ordered[0].id, "fast");
         assert!(ordered[0].rng_bias.unwrap() > ordered[1].rng_bias.unwrap());
 
@@ -830,7 +817,7 @@ mod tests {
         ))
         .await;
 
-        let archivers = Arc::new(RwLock::new(vec![
+        let archivers = Arc::new(ArcSwap::new(Arc::new(vec![
             archivers::Archiver {
                 ip: "127.0.0.1".into(),
                 port: bad_port,
@@ -841,7 +828,7 @@ mod tests {
                 port: good_port,
                 publicKey: String::new(),
             },
-        ]));
+        ])));
 
         let mut cfg = sample_config();
         cfg.standalone_network.enabled = true;
@@ -857,7 +844,7 @@ mod tests {
         bad_server.abort();
         good_server.abort();
 
-        let list = liberdus.active_nodelist.read().await.clone();
+        let list = liberdus.active_nodelist.load();
         assert_eq!(list.len(), 2);
         assert!(list.iter().all(|n| n.ip == "192.0.2.1"));
         assert!(list.iter().all(|n| n.id == "node1" || n.id == "node2"));
@@ -911,7 +898,7 @@ mod tests {
 
         let liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed)),
-            Arc::new(RwLock::new(Vec::new())),
+            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
             cfg.clone(),
         );
 
@@ -941,20 +928,17 @@ mod tests {
 
         let liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed)),
-            Arc::new(RwLock::new(Vec::new())),
+            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
             cfg,
         );
 
-        {
-            let mut nodes = liberdus.active_nodelist.write().await;
-            nodes.push(Consensor {
-                id: "n1".into(),
-                ip: "127.0.0.1".into(),
+        liberdus.active_nodelist.store(Arc::new(vec![Consensor {
+            id: "n1".into(),
+            ip: "127.0.0.1".into(),
                 port: cons_port,
                 publicKey: String::new(),
                 rng_bias: Some(1.0),
-            });
-        }
+            }]));
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -988,16 +972,13 @@ mod tests {
         .await;
 
         let liberdus = sample_liberdus();
-        {
-            let mut nodes = liberdus.active_nodelist.write().await;
-            nodes.push(Consensor {
-                id: "fast".into(),
-                ip: "127.0.0.1".into(),
+        liberdus.active_nodelist.store(Arc::new(vec![Consensor {
+            id: "fast".into(),
+            ip: "127.0.0.1".into(),
                 port,
                 publicKey: String::new(),
                 rng_bias: Some(1.0),
-            });
-        }
+            }]));
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -1033,16 +1014,13 @@ mod tests {
         cfg.max_http_timeout_ms = 100;
 
         let liberdus = sample_liberdus();
-        {
-            let mut nodes = liberdus.active_nodelist.write().await;
-            nodes.push(Consensor {
-                id: "fast".into(),
-                ip: "127.0.0.1".into(),
+        liberdus.active_nodelist.store(Arc::new(vec![Consensor {
+            id: "fast".into(),
+            ip: "127.0.0.1".into(),
                 port: 9_999,
                 publicKey: String::new(),
                 rng_bias: Some(1.0),
-            });
-        }
+            }]));
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -1073,23 +1051,22 @@ mod tests {
     #[tokio::test]
     async fn get_next_round_robins_then_bias() {
         let liberdus = sample_liberdus();
-        {
-            let mut nodes = liberdus.active_nodelist.write().await;
-            nodes.push(Consensor {
+        liberdus.active_nodelist.store(Arc::new(vec![
+            Consensor {
                 id: "one".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
                 publicKey: "pk1".into(),
                 rng_bias: None,
-            });
-            nodes.push(Consensor {
+            },
+            Consensor {
                 id: "two".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
                 publicKey: "pk2".into(),
                 rng_bias: None,
-            });
-        }
+            },
+        ]));
 
         {
             let mut trips = liberdus.trip_ms.write().await;

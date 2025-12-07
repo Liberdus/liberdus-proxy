@@ -436,7 +436,7 @@ pub(crate) mod tests {
         ));
         let liberdus = Arc::new(crate::liberdus::Liberdus::new(
             crypto,
-            Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            Arc::new(arc_swap::ArcSwap::new(Arc::new(Vec::new()))),
             sample_config(),
         ));
         Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)
