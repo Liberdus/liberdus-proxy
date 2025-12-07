@@ -7,7 +7,6 @@ pub struct Stats {
 }
 
 pub mod archivers;
-pub mod swap_cell;
 pub mod collector;
 pub mod config;
 pub mod crypto;
