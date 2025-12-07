@@ -1,11 +1,11 @@
 // src/notifier.rs
+use crate::config::Config;
 use crate::http;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use tokio::time::Duration;
-use tokio::time::timeout;
 use tokio::net::TcpStream;
-use crate::config::Config;
+use tokio::time::timeout;
+use tokio::time::Duration;
 
 pub async fn handle_request<S>(
     mut request_buffer: Vec<u8>,
@@ -127,7 +127,10 @@ mod tests {
     use tokio::io::AsyncReadExt;
     use tokio::net::TcpListener;
 
-    use crate::config::{Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig, StandaloneNetworkConfig, TLSConfig};
+    use crate::config::{
+        Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig,
+        StandaloneNetworkConfig, TLSConfig,
+    };
 
     fn test_config(port: u16) -> Config {
         Config {
@@ -205,7 +208,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_notifier_get_request() {
-        let buffer = b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
+        let buffer =
+            b"GET /notifier/api/some_endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
         let response = run_request(buffer).await;
         assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200"));
     }

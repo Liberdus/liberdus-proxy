@@ -1,5 +1,5 @@
-use crate::{rpc, subscription};
 use crate::{config, liberdus, Stats};
+use crate::{rpc, subscription};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -431,6 +431,9 @@ mod tests {
         server.await.unwrap();
 
         assert!(sock_map.read().await.is_empty());
-        assert!(subscription_manager.get_all_subscriptions().await.is_empty());
+        assert!(subscription_manager
+            .get_all_subscriptions()
+            .await
+            .is_empty());
     }
 }

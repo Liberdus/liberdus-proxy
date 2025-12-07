@@ -1,14 +1,23 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use liberdus_proxy::{
-    archivers::{self, ArchiverUtil },
+    archivers::{self, ArchiverUtil},
     config::{self, Config},
     crypto::{self, ShardusCrypto},
-    liberdus::{Consensor, Liberdus, SignedNodeListResp}, swap_cell::SwapCell,
+    liberdus::{Consensor, Liberdus, SignedNodeListResp},
+    swap_cell::SwapCell,
 };
-use std::{cmp::Ordering, collections::HashMap, fs, sync::{Arc, atomic::{AtomicBool, AtomicUsize}}};
-use std::time::Duration;
-use tokio::{runtime::Runtime, sync::RwLock};
 use rand::prelude::*;
+use std::time::Duration;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fs,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
+};
+use tokio::{runtime::Runtime, sync::RwLock};
 
 fn benchmark_get_consensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("Integrated Read Latency SwapCell vs RwLock");
@@ -23,13 +32,17 @@ fn benchmark_get_consensor(c: &mut Criterion) {
     // Use the mock server address for the seed archiver
     let seed_archiver = {
         let blunt_string = fs::read_to_string(&config.archiver_seed_path)
-        .map_err(|err| format!("Failed to read archiver seed file: {}", err))
-        .unwrap();
+            .map_err(|err| format!("Failed to read archiver seed file: {}", err))
+            .unwrap();
 
         serde_json::from_str(&blunt_string).unwrap()
     };
 
-    let arch_utils = Arc::new(ArchiverUtil::new(crypto.clone(), seed_archiver, config.clone()));
+    let arch_utils = Arc::new(ArchiverUtil::new(
+        crypto.clone(),
+        seed_archiver,
+        config.clone(),
+    ));
     let lbd = Arc::new(Liberdus::new(
         crypto.clone(),
         arch_utils.get_active_archivers(),
@@ -85,9 +98,7 @@ fn benchmark_get_consensor(c: &mut Criterion) {
 
     group.bench_function("RwLock read", |b| {
         b.to_async(&rt).iter(|| async {
-            old_lbd_with_rwlock
-                .get_next_appropriate_consensor()
-                .await;
+            old_lbd_with_rwlock.get_next_appropriate_consensor().await;
         });
     });
     bg2.abort();
@@ -95,8 +106,6 @@ fn benchmark_get_consensor(c: &mut Criterion) {
 
 criterion_group!(benches, benchmark_get_consensor);
 criterion_main!(benches);
-
-
 
 pub struct LiberdusRwLock {
     pub active_nodelist: Arc<RwLock<Vec<Consensor>>>,
@@ -177,21 +186,21 @@ impl LiberdusRwLock {
 
                     // Filter out top and bottom nodes from the join-ordered list
                     // This helps avoid nodes that might be joining/leaving or unstable
-                    if self.config.node_filtering.enabled 
-                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering {
-                        
+                    if self.config.node_filtering.enabled
+                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering
+                    {
                         let remove_bottom = self.config.node_filtering.remove_bottom_nodes;
                         let remove_top = self.config.node_filtering.remove_top_nodes;
-                        
+
                         // Remove bottom nodes first (affects indices less)
                         let nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
                         nodelist.truncate(nodes_to_keep);
-                        
+
                         // Remove top nodes
                         if remove_top > 0 && nodelist.len() > remove_top {
                             nodelist.drain(0..remove_top);
                         }
-                        
+
                         println!("Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)", 
                                  nodelist.len(), remove_top, remove_bottom);
                     } else if self.config.node_filtering.enabled {
@@ -399,7 +408,4 @@ impl LiberdusRwLock {
             &pk,
         )
     }
-
 }
-
-

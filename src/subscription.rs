@@ -204,9 +204,7 @@ impl Manager {
             .entry(account.to_string())
             .or_default()
             .insert(socket_id.clone());
-        guard
-            .last_received
-            .insert(account.to_string(), timestamp);
+        guard.last_received.insert(account.to_string(), timestamp);
     }
 }
 
@@ -217,9 +215,9 @@ pub struct AccountUpdatePayload {
     #[serde(deserialize_with = "deserialize_stringified_account_update")]
     data: AccountUpdate,
 }
-    fn deserialize_stringified_account_update<'de, D>(
-        deserializer: D,
-    ) -> Result<AccountUpdate, D::Error>
+fn deserialize_stringified_account_update<'de, D>(
+    deserializer: D,
+) -> Result<AccountUpdate, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -389,8 +387,7 @@ pub(crate) mod tests {
     fn sample_config() -> crate::config::Config {
         crate::config::Config {
             http_port: 0,
-            crypto_seed:
-                "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+            crypto_seed: "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
             archiver_seed_path: String::new(),
             nodelist_refresh_interval_sec: 1,
             debug: false,

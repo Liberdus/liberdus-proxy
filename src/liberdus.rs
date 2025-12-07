@@ -123,21 +123,21 @@ impl Liberdus {
 
                     // Filter out top and bottom nodes from the join-ordered list
                     // This helps avoid nodes that might be joining/leaving or unstable
-                    if self.config.node_filtering.enabled 
-                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering {
-                        
+                    if self.config.node_filtering.enabled
+                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering
+                    {
                         let remove_bottom = self.config.node_filtering.remove_bottom_nodes;
                         let remove_top = self.config.node_filtering.remove_top_nodes;
-                        
+
                         // Remove bottom nodes first (affects indices less)
                         let nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
                         nodelist.truncate(nodes_to_keep);
-                        
+
                         // Remove top nodes
                         if remove_top > 0 && nodelist.len() > remove_top {
                             nodelist.drain(0..remove_top);
                         }
-                        
+
                         println!("Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)", 
                                  nodelist.len(), remove_top, remove_bottom);
                     } else if self.config.node_filtering.enabled {
@@ -565,7 +565,7 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio::sync::RwLock;
 
-use crate::swap_cell::SwapCell;
+    use crate::swap_cell::SwapCell;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_weighted_random() {
@@ -639,8 +639,7 @@ use crate::swap_cell::SwapCell;
     fn sample_config() -> config::Config {
         config::Config {
             http_port: 0,
-            crypto_seed:
-                "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+            crypto_seed: "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
             archiver_seed_path: String::new(),
             nodelist_refresh_interval_sec: 1,
             debug: false,
@@ -684,11 +683,7 @@ use crate::swap_cell::SwapCell;
         let crypto = Arc::new(crypto::ShardusCrypto::new(
             "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
         ));
-        Liberdus::new(
-            crypto,
-            Arc::new(SwapCell::new(Vec::new())),
-            sample_config(),
-        )
+        Liberdus::new(crypto, Arc::new(SwapCell::new(Vec::new())), sample_config())
     }
 
     #[test]
@@ -707,18 +702,18 @@ use crate::swap_cell::SwapCell;
             foundationNode: Some(false),
             id: "slow".into(),
             ip: "127.0.0.1".into(),
-                port: 80,
-                publicKey: "pk1".into(),
-                rng_bias: None,
-            });
-            nodes.push(Consensor {
-                foundationNode: Some(false),
-                id: "fast".into(),
-                ip: "127.0.0.1".into(),
-                port: 80,
-                publicKey: "pk2".into(),
-                rng_bias: None,
-            });
+            port: 80,
+            publicKey: "pk1".into(),
+            rng_bias: None,
+        });
+        nodes.push(Consensor {
+            foundationNode: Some(false),
+            id: "fast".into(),
+            ip: "127.0.0.1".into(),
+            port: 80,
+            publicKey: "pk2".into(),
+            rng_bias: None,
+        });
         liberdus.active_nodelist.publish(nodes);
 
         {
@@ -769,7 +764,10 @@ use crate::swap_cell::SwapCell;
             "nodeList": nodes.clone(),
         });
 
-        let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
+        let hash = crypto.hash(
+            &unsigned_msg.to_string().into_bytes(),
+            crate::crypto::Format::Hex,
+        );
         let sig_bytes = crypto
             .sign(hash, sk)
             .expect("signature")
@@ -819,13 +817,15 @@ use crate::swap_cell::SwapCell;
 
         let (bad_server, bad_port) = start_http_server(format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            bad_json.len(), bad_json
+            bad_json.len(),
+            bad_json
         ))
         .await;
 
         let (good_server, good_port) = start_http_server(format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            good_json.len(), good_json
+            good_json.len(),
+            good_json
         ))
         .await;
 
@@ -901,7 +901,8 @@ use crate::swap_cell::SwapCell;
         .to_string();
         let (collector, collector_port) = start_http_server(format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            collector_resp.len(), collector_resp
+            collector_resp.len(),
+            collector_resp
         ))
         .await;
 
@@ -926,7 +927,8 @@ use crate::swap_cell::SwapCell;
         let cons_body = "{\"account\":true}";
         let (cons_server, cons_port) = start_http_server(format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            cons_body.len(), cons_body
+            cons_body.len(),
+            cons_body
         ))
         .await;
 
@@ -950,10 +952,10 @@ use crate::swap_cell::SwapCell;
             foundationNode: Some(false),
             id: "n1".into(),
             ip: "127.0.0.1".into(),
-                port: cons_port,
-                publicKey: String::new(),
-                rng_bias: Some(1.0),
-            });
+            port: cons_port,
+            publicKey: String::new(),
+            rng_bias: Some(1.0),
+        });
         liberdus.active_nodelist.publish(nodes);
         liberdus
             .load_distribution_commulative_bias
@@ -983,7 +985,8 @@ use crate::swap_cell::SwapCell;
         let ok_body = "ok";
         let (server_handle, port) = start_http_server(format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            ok_body.len(), ok_body
+            ok_body.len(),
+            ok_body
         ))
         .await;
 
@@ -993,10 +996,10 @@ use crate::swap_cell::SwapCell;
             foundationNode: Some(false),
             id: "fast".into(),
             ip: "127.0.0.1".into(),
-                port,
-                publicKey: String::new(),
-                rng_bias: Some(1.0),
-            });
+            port,
+            publicKey: String::new(),
+            rng_bias: Some(1.0),
+        });
         liberdus.active_nodelist.publish(nodes);
         liberdus
             .load_distribution_commulative_bias
@@ -1038,10 +1041,10 @@ use crate::swap_cell::SwapCell;
             foundationNode: Some(false),
             id: "fast".into(),
             ip: "127.0.0.1".into(),
-                port: 9_999,
-                publicKey: String::new(),
-                rng_bias: Some(1.0),
-            });
+            port: 9_999,
+            publicKey: String::new(),
+            rng_bias: Some(1.0),
+        });
         liberdus.active_nodelist.publish(nodes);
         liberdus
             .load_distribution_commulative_bias
@@ -1078,18 +1081,18 @@ use crate::swap_cell::SwapCell;
             foundationNode: Some(false),
             id: "one".into(),
             ip: "127.0.0.1".into(),
-                port: 80,
-                publicKey: "pk1".into(),
-                rng_bias: None,
-            });
-            nodes.push(Consensor {
-                foundationNode: Some(false),
-                id: "two".into(),
-                ip: "127.0.0.1".into(),
-                port: 80,
-                publicKey: "pk2".into(),
-                rng_bias: None,
-            });
+            port: 80,
+            publicKey: "pk1".into(),
+            rng_bias: None,
+        });
+        nodes.push(Consensor {
+            foundationNode: Some(false),
+            id: "two".into(),
+            ip: "127.0.0.1".into(),
+            port: 80,
+            publicKey: "pk2".into(),
+            rng_bias: None,
+        });
         liberdus.active_nodelist.publish(nodes);
 
         {
@@ -1112,7 +1115,9 @@ use crate::swap_cell::SwapCell;
     #[test]
     fn old_receipt_route_variants() {
         assert_eq!(
-            is_old_receipt_route("/old_receipt/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"),
+            is_old_receipt_route(
+                "/old_receipt/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+            ),
             Some("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".into())
         );
         assert_eq!(is_old_receipt_route("/wrong/abcd"), None);
@@ -1269,4 +1274,3 @@ pub fn is_old_receipt_route(route: &str) -> Option<String> {
         _ => None,
     }
 }
-

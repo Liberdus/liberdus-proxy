@@ -25,7 +25,6 @@ fn benchmark_read_latency(c: &mut Criterion) {
 
     group.measurement_time(Duration::from_secs(20));
 
-
     let runtime = Runtime::new().unwrap();
 
     // --- RwLock Benchmark ---

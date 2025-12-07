@@ -7,7 +7,6 @@ pub struct Stats {
 }
 
 pub mod archivers;
-pub mod swap_cell;
 pub mod collector;
 pub mod config;
 pub mod crypto;
@@ -17,6 +16,7 @@ pub mod notifier;
 pub mod rpc;
 pub mod shardus_monitor;
 pub mod subscription;
+pub mod swap_cell;
 pub mod tls;
 pub mod ws;
 

@@ -116,7 +116,8 @@ mod tests {
         assert!(ok.error.is_none());
         assert_eq!(ok.result.unwrap()["ok"], true);
 
-        let err = generate_error_response(Some(2), "bad".into(), RpcErrorCode::InternalError as i32);
+        let err =
+            generate_error_response(Some(2), "bad".into(), RpcErrorCode::InternalError as i32);
         assert_eq!(err.id, Some(2));
         assert!(err.result.is_none());
         assert_eq!(err.error.unwrap().code, RpcErrorCode::InternalError as i32);

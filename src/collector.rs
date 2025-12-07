@@ -248,7 +248,8 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
-            body.len(), body
+            body.len(),
+            body
         );
 
         let handle = tokio::spawn(async move {
@@ -288,10 +289,9 @@ mod tests {
         let (port, server) =
             spawn_http_server(r#"{"success":false,"error":"nope","transactions":[]}"#).await;
 
-        let err =
-            get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
-                .await
-                .unwrap_err();
+        let err = get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
+            .await
+            .unwrap_err();
 
         server.await.unwrap();
 
@@ -300,10 +300,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_transaction_handles_missing() {
-        let (port, server) = spawn_http_server(
-            r#"{"success":false,"error":"not found","transactions":[]}"#,
-        )
-        .await;
+        let (port, server) =
+            spawn_http_server(r#"{"success":false,"error":"not found","transactions":[]}"#).await;
 
         let tx = get_transaction(&"127.0.0.1".to_string(), &port, &"id".to_string()).await;
         server.await.unwrap();
@@ -313,10 +311,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_account_by_address_success() {
-        let (port, server) = spawn_http_server(
-            r#"{"accounts":[{"data":{"account":"ok"}}]}"#,
-        )
-        .await;
+        let (port, server) = spawn_http_server(r#"{"accounts":[{"data":{"account":"ok"}}]}"#).await;
 
         let value = get_account_by_address("127.0.0.1", &port.to_string(), "acct")
             .await
