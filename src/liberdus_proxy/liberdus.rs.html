@@ -1246,10 +1246,32 @@
 <a href="#1245" id="1245">1245</a>
 <a href="#1246" id="1246">1246</a>
 <a href="#1247" id="1247">1247</a>
-<a href="#1248" id="1248">1248</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
 </span><span class="kw">use </span><span class="kw">crate</span>::crypto;
 <span class="kw">use crate</span>::{archivers, collector, config, http};
-<span class="kw">use </span>arc_swap::ArcSwap;
 <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>serde::{<span class="self">self</span>, Deserialize, Serialize};
 <span class="kw">use </span>std::{
@@ -1291,9 +1313,9 @@
 }
 
 <span class="kw">pub struct </span>Liberdus {
-    <span class="kw">pub </span>active_nodelist: Arc&lt;ArcSwap&lt;Vec&lt;Consensor&gt;&gt;&gt;,
+    <span class="kw">pub </span>active_nodelist: Arc&lt;RwLock&lt;Vec&lt;Consensor&gt;&gt;&gt;,
     trip_ms: Arc&lt;RwLock&lt;HashMap&lt;String, u128&gt;&gt;&gt;,
-    archivers: Arc&lt;ArcSwap&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;,
+    archivers: Arc&lt;RwLock&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;,
     round_robin_index: Arc&lt;AtomicUsize&gt;,
     list_prepared: Arc&lt;AtomicBool&gt;,
     crypto: Arc&lt;crypto::ShardusCrypto&gt;,
@@ -1304,14 +1326,14 @@
 <span class="kw">impl </span>Liberdus {
     <span class="kw">pub fn </span>new(
         sc: Arc&lt;crypto::ShardusCrypto&gt;,
-        archivers: Arc&lt;ArcSwap&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;,
+        archivers: Arc&lt;RwLock&lt;Vec&lt;archivers::Archiver&gt;&gt;&gt;,
         config: config::Config,
     ) -&gt; <span class="self">Self </span>{
         Liberdus {
             config: Arc::new(config),
             round_robin_index: Arc::new(AtomicUsize::new(<span class="number">0</span>)),
             trip_ms: Arc::new(RwLock::new(HashMap::new())),
-            active_nodelist: Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
+            active_nodelist: Arc::new(RwLock::new(Vec::new())),
             list_prepared: Arc::new(AtomicBool::new(<span class="bool-val">false</span>)),
             archivers,
             crypto: sc,
@@ -1321,7 +1343,7 @@
 
     <span class="doccomment">/// trigger a full nodelist update from one of the archivers
     </span><span class="kw">pub async fn </span>update_active_nodelist(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span>archivers = <span class="self">self</span>.archivers.load();
+        <span class="kw">let </span>archivers = <span class="self">self</span>.archivers.read().<span class="kw">await</span>;
 
         <span class="kw">for </span>archiver <span class="kw">in </span>archivers.iter() {
             <span class="kw">let </span>url = <span class="macro">format!</span>(
@@ -1391,7 +1413,10 @@
                                  nodelist.len(), <span class="self">self</span>.config.node_filtering.min_nodes_for_filtering);
                     }
 
-                    <span class="self">self</span>.active_nodelist.store(Arc::new(nodelist));
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.active_nodelist.write().<span class="kw">await</span>;
+                        <span class="kw-2">*</span>guard = nodelist;
+                    }
 
                     <span class="self">self</span>.round_robin_index
                         .store(<span class="number">0</span>, std::sync::atomic::Ordering::Relaxed);
@@ -1533,7 +1558,10 @@
             <span class="kw">return</span>;
         }
 
-        <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.load().clone().to_vec();
+        <span class="kw">let </span>nodes = {
+            <span class="kw">let </span>guard = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>;
+            guard.clone()
+        };
 
         <span class="kw">let </span>trip_ms = {
             <span class="kw">let </span>guard = <span class="self">self</span>.trip_ms.read().<span class="kw">await</span>;
@@ -1559,7 +1587,10 @@
             cumulative_bias.push(total_bias);
         }
 
-        <span class="self">self</span>.active_nodelist.store(Arc::new(sorted_nodes));
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.active_nodelist.write().<span class="kw">await</span>;
+            <span class="kw-2">*</span>guard = sorted_nodes;
+        }
 
         {
             <span class="kw">let </span><span class="kw-2">mut </span>guard = <span class="self">self</span>.load_distribution_commulative_bias.write().<span class="kw">await</span>;
@@ -1582,7 +1613,7 @@
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
 
-        <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.load().clone();
+        <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>cumulative_weights = <span class="self">self</span>.load_distribution_commulative_bias.read().<span class="kw">await</span>.clone();
 
         <span class="kw">if </span>nodes.is_empty() || cumulative_weights.is_empty() {
@@ -1622,7 +1653,7 @@
     /// node selection. Subsequent call will be redirected towards the node based on that bias and round robin
     /// is dismissed.
     </span><span class="kw">pub async fn </span>get_next_appropriate_consensor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Consensor)&gt; {
-        <span class="kw">if </span><span class="self">self</span>.active_nodelist.load().is_empty() {
+        <span class="kw">if </span><span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.is_empty() {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
         <span class="kw">match </span><span class="self">self
@@ -1634,7 +1665,7 @@
                 .<span class="kw">await
                 </span>.clone()
                 .len()
-                == <span class="self">self</span>.active_nodelist.load().len())
+                == <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>.len())
         {
             <span class="bool-val">true </span>=&gt; <span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>,
             <span class="bool-val">false </span>=&gt; {
@@ -1642,8 +1673,13 @@
                     </span>.round_robin_index
                     .fetch_add(<span class="number">1</span>, std::sync::atomic::Ordering::Relaxed);
 
-                <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.load();
+                <span class="kw">let </span>nodes = <span class="self">self</span>.active_nodelist.read().<span class="kw">await</span>;
                 <span class="kw">if </span>index &gt;= nodes.len() {
+                    <span class="comment">// dropping the `nodes` is really important here
+                    // prepare_list() will acquire write lock
+                    // but this scope here has a simultaneous read lock
+                    // this will cause a deadlock if not drop
+                    </span>drop(nodes);
                     <span class="self">self</span>.prepare_list().<span class="kw">await</span>;
                     <span class="kw">return </span><span class="self">self</span>.get_random_consensor_biased().<span class="kw">await</span>;
                 }
@@ -1801,7 +1837,6 @@
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span>arc_swap::ArcSwap;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
     <span class="kw">use </span>tokio::net::TcpListener;
@@ -1819,7 +1854,7 @@
             publicKey: <span class="string">"0x0"</span>.to_string(),
         };
 
-        <span class="kw">let </span>archivers = Arc::new(ArcSwap::new(Arc::new(<span class="macro">vec!</span>[_mock_archiver])));
+        <span class="kw">let </span>archivers = Arc::new(RwLock::new(<span class="macro">vec!</span>[_mock_archiver]));
         <span class="kw">let </span>liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(
                 <span class="string">"69fa4195670576c0160d660c3be36556ff8d504725be8a59b5a96509e0c994bc"</span>,
@@ -1839,7 +1874,7 @@
             nodes.push(node);
         }
 
-        liberdus.active_nodelist.store(Arc::new(nodes));
+        liberdus.active_nodelist.write().<span class="kw">await</span>.extend(nodes);
 
         liberdus
             .round_robin_index
@@ -1925,7 +1960,7 @@
         ));
         Liberdus::new(
             crypto,
-            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
+            Arc::new(RwLock::new(Vec::new())),
             sample_config(),
         )
     }
@@ -1941,22 +1976,23 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>prepare_list_sorts_nodes_by_rtt() {
         <span class="kw">let </span>liberdus = sample_liberdus();
-        liberdus.active_nodelist.store(Arc::new(<span class="macro">vec!</span>[
-            Consensor {
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
                 id: <span class="string">"slow"</span>.into(),
                 ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: <span class="number">80</span>,
                 publicKey: <span class="string">"pk1"</span>.into(),
                 rng_bias: <span class="prelude-val">None</span>,
-            },
-            Consensor {
+            });
+            nodes.push(Consensor {
                 id: <span class="string">"fast"</span>.into(),
                 ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: <span class="number">80</span>,
                 publicKey: <span class="string">"pk2"</span>.into(),
                 rng_bias: <span class="prelude-val">None</span>,
-            },
-        ]));
+            });
+        }
 
         {
             <span class="kw">let </span><span class="kw-2">mut </span>trips = liberdus.trip_ms.write().<span class="kw">await</span>;
@@ -1966,7 +2002,7 @@
 
         liberdus.prepare_list().<span class="kw">await</span>;
 
-        <span class="kw">let </span>ordered = liberdus.active_nodelist.load();
+        <span class="kw">let </span>ordered = liberdus.active_nodelist.read().<span class="kw">await</span>.clone();
         <span class="macro">assert_eq!</span>(ordered[<span class="number">0</span>].id, <span class="string">"fast"</span>);
         <span class="macro">assert!</span>(ordered[<span class="number">0</span>].rng_bias.unwrap() &gt; ordered[<span class="number">1</span>].rng_bias.unwrap());
 
@@ -2065,7 +2101,7 @@
         ))
         .<span class="kw">await</span>;
 
-        <span class="kw">let </span>archivers = Arc::new(ArcSwap::new(Arc::new(<span class="macro">vec!</span>[
+        <span class="kw">let </span>archivers = Arc::new(RwLock::new(<span class="macro">vec!</span>[
             archivers::Archiver {
                 ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: bad_port,
@@ -2076,7 +2112,7 @@
                 port: good_port,
                 publicKey: String::new(),
             },
-        ])));
+        ]));
 
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = sample_config();
         cfg.standalone_network.enabled = <span class="bool-val">true</span>;
@@ -2092,7 +2128,7 @@
         bad_server.abort();
         good_server.abort();
 
-        <span class="kw">let </span>list = liberdus.active_nodelist.load();
+        <span class="kw">let </span>list = liberdus.active_nodelist.read().<span class="kw">await</span>.clone();
         <span class="macro">assert_eq!</span>(list.len(), <span class="number">2</span>);
         <span class="macro">assert!</span>(list.iter().all(|n| n.ip == <span class="string">"192.0.2.1"</span>));
         <span class="macro">assert!</span>(list.iter().all(|n| n.id == <span class="string">"node1" </span>|| n.id == <span class="string">"node2"</span>));
@@ -2146,7 +2182,7 @@
 
         <span class="kw">let </span>liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed)),
-            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
+            Arc::new(RwLock::new(Vec::new())),
             cfg.clone(),
         );
 
@@ -2176,17 +2212,20 @@
 
         <span class="kw">let </span>liberdus = Liberdus::new(
             Arc::new(crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed)),
-            Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
+            Arc::new(RwLock::new(Vec::new())),
             cfg,
         );
 
-        liberdus.active_nodelist.store(Arc::new(<span class="macro">vec!</span>[Consensor {
-            id: <span class="string">"n1"</span>.into(),
-            ip: <span class="string">"127.0.0.1"</span>.into(),
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
+                id: <span class="string">"n1"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: cons_port,
                 publicKey: String::new(),
                 rng_bias: <span class="prelude-val">Some</span>(<span class="number">1.0</span>),
-            }]));
+            });
+        }
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -2220,13 +2259,16 @@
         .<span class="kw">await</span>;
 
         <span class="kw">let </span>liberdus = sample_liberdus();
-        liberdus.active_nodelist.store(Arc::new(<span class="macro">vec!</span>[Consensor {
-            id: <span class="string">"fast"</span>.into(),
-            ip: <span class="string">"127.0.0.1"</span>.into(),
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
+                id: <span class="string">"fast"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
                 port,
                 publicKey: String::new(),
                 rng_bias: <span class="prelude-val">Some</span>(<span class="number">1.0</span>),
-            }]));
+            });
+        }
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -2262,13 +2304,16 @@
         cfg.max_http_timeout_ms = <span class="number">100</span>;
 
         <span class="kw">let </span>liberdus = sample_liberdus();
-        liberdus.active_nodelist.store(Arc::new(<span class="macro">vec!</span>[Consensor {
-            id: <span class="string">"fast"</span>.into(),
-            ip: <span class="string">"127.0.0.1"</span>.into(),
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
+                id: <span class="string">"fast"</span>.into(),
+                ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: <span class="number">9_999</span>,
                 publicKey: String::new(),
                 rng_bias: <span class="prelude-val">Some</span>(<span class="number">1.0</span>),
-            }]));
+            });
+        }
         liberdus
             .load_distribution_commulative_bias
             .write()
@@ -2299,22 +2344,23 @@
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>get_next_round_robins_then_bias() {
         <span class="kw">let </span>liberdus = sample_liberdus();
-        liberdus.active_nodelist.store(Arc::new(<span class="macro">vec!</span>[
-            Consensor {
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>nodes = liberdus.active_nodelist.write().<span class="kw">await</span>;
+            nodes.push(Consensor {
                 id: <span class="string">"one"</span>.into(),
                 ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: <span class="number">80</span>,
                 publicKey: <span class="string">"pk1"</span>.into(),
                 rng_bias: <span class="prelude-val">None</span>,
-            },
-            Consensor {
+            });
+            nodes.push(Consensor {
                 id: <span class="string">"two"</span>.into(),
                 ip: <span class="string">"127.0.0.1"</span>.into(),
                 port: <span class="number">80</span>,
                 publicKey: <span class="string">"pk2"</span>.into(),
                 rng_bias: <span class="prelude-val">None</span>,
-            },
-        ]));
+            });
+        }
 
         {
             <span class="kw">let </span><span class="kw-2">mut </span>trips = liberdus.trip_ms.write().<span class="kw">await</span>;

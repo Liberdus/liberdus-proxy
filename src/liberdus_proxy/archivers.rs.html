@@ -482,7 +482,10 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Archiver Utility Module
 //!
 //! This module provides functionality for managing and discovering archivers in the network.
 //! It includes methods for loading archivers, verifying their authenticity, and maintaining
@@ -490,15 +493,14 @@
 //! allowing seamless integration in a highly concurrent environment.
 </span><span class="kw">use </span><span class="kw">crate</span>::config;
 <span class="kw">use </span><span class="kw">crate</span>::crypto::ShardusCrypto;
-<span class="kw">use </span>arc_swap::ArcSwap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>tokio::io::AsyncWriteExt;
+<span class="kw">use </span>tokio::{io::AsyncWriteExt, sync::RwLock};
 
 <span class="kw">pub struct </span>ArchiverUtil {
     config: config::Config,
-    seed_list: Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt;,
-    active_archivers: Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    seed_list: Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    active_archivers: Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt;,
     crypto: Arc&lt;ShardusCrypto&gt;,
 }
 
@@ -541,8 +543,8 @@
 
         ArchiverUtil {
             config,
-            seed_list: Arc::new(ArcSwap::new(Arc::new(seed))),
-            active_archivers: Arc::new(ArcSwap::new(Arc::new(Vec::new()))),
+            seed_list: Arc::new(RwLock::new(seed)),
+            active_archivers: Arc::new(RwLock::new(Vec::new())),
             crypto: sc,
         }
     }
@@ -568,7 +570,7 @@
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Vec::new(),
         };
 
-        cache.extend(<span class="self">self</span>.seed_list.load().clone().to_vec());
+        cache.extend(<span class="self">self</span>.seed_list.read().<span class="kw">await</span>.clone());
         cache.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) =
@@ -639,7 +641,11 @@
 
         <span class="kw">let </span>dump = tmp.clone();
 
-        long_lived_self.active_archivers.store(Arc::new(tmp));
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>guard = long_lived_self.active_archivers.write().<span class="kw">await</span>;
+            <span class="kw-2">*</span>guard = tmp;
+            drop(guard);
+        }
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>file = tokio::fs::File::create(<span class="string">"known_archiver_cache.json"</span>)
@@ -651,7 +657,7 @@
     }
 
     <span class="doccomment">/// Returns the reference counted clone of active archivers list.
-    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt; {
+    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;RwLock&lt;Vec&lt;Archiver&gt;&gt;&gt; {
         <span class="self">self</span>.active_archivers.clone()
     }
 
@@ -844,7 +850,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.load();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
         <span class="macro">assert_eq!</span>(guard.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].publicKey, <span class="string">"returned_pk"</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].ip, <span class="string">"10.0.0.1"</span>);
@@ -895,7 +901,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.load();
+        <span class="kw">let </span>guard = active.read().<span class="kw">await</span>;
         <span class="macro">assert!</span>(guard.is_empty());
         <span class="macro">assert!</span>(!std::path::Path::new(<span class="string">"known_archiver_cache.json"</span>).exists());
     }
