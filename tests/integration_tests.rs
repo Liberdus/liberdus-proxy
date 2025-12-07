@@ -9,8 +9,7 @@ use liberdus_proxy::{collector, config};
 fn test_config(port: u16) -> Arc<config::Config> {
     Arc::new(config::Config {
         http_port: 0,
-        crypto_seed:
-            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+        crypto_seed: "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
         archiver_seed_path: String::new(),
         nodelist_refresh_interval_sec: 1,
         debug: true,
@@ -98,7 +97,9 @@ async fn get_receipt_smoke_test() {
     let body = "{\"receipt\":true}";
     let (addr, server) = spawn_mock_server(body).await;
 
-    let result = collector::get_receipt("127.0.0.1", &addr.port(), "tx").await.unwrap();
+    let result = collector::get_receipt("127.0.0.1", &addr.port(), "tx")
+        .await
+        .unwrap();
     server.await.unwrap();
 
     assert_eq!(result, serde_json::json!({"receipt": true}));

@@ -196,7 +196,6 @@ impl ArchiverUtil {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,9 +220,8 @@ mod tests {
         sodiumoxide::crypto::sign::SecretKey,
         ShardusCrypto,
     ) {
-        let crypto = ShardusCrypto::new(
-            "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
-        );
+        let crypto =
+            ShardusCrypto::new("64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347");
         let sk = sodiumoxide::crypto::sign::SecretKey::from_slice(
             &sodiumoxide::hex::decode(
                 "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d",
@@ -238,8 +236,7 @@ mod tests {
     fn test_config(standalone: bool) -> config::Config {
         config::Config {
             http_port: 0,
-            crypto_seed:
-                "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
+            crypto_seed: "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347".into(),
             archiver_seed_path: String::new(),
             nodelist_refresh_interval_sec: 1,
             debug: true,
@@ -352,7 +349,11 @@ Connection: close
             ip: "127.0.0.1".into(),
         };
 
-        let util = Arc::new(ArchiverUtil::new(Arc::new(crypto), vec![seed_archiver], config));
+        let util = Arc::new(ArchiverUtil::new(
+            Arc::new(crypto),
+            vec![seed_archiver],
+            config,
+        ));
 
         timeout(Duration::from_secs(3), util.clone().discover())
             .await
@@ -403,7 +404,11 @@ Connection: close
             ip: "127.0.0.1".into(),
         };
 
-        let util = Arc::new(ArchiverUtil::new(Arc::new(crypto), vec![seed_archiver], config));
+        let util = Arc::new(ArchiverUtil::new(
+            Arc::new(crypto),
+            vec![seed_archiver],
+            config,
+        ));
 
         timeout(Duration::from_secs(3), util.clone().discover())
             .await
@@ -428,7 +433,10 @@ Connection: close
         let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(false));
 
         let unsigned_msg = serde_json::json!({"activeArchivers": archivers});
-        let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
+        let hash = crypto.hash(
+            &unsigned_msg.to_string().into_bytes(),
+            crate::crypto::Format::Hex,
+        );
 
         let kp = crypto.get_key_pair_using_sk(&crate::crypto::HexStringOrBuffer::Hex(
             "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
@@ -461,7 +469,10 @@ Connection: close
         let util = ArchiverUtil::new(crypto.clone(), archivers.clone(), test_config(false));
 
         let unsigned_msg = serde_json::json!({"activeArchivers": archivers});
-        let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crate::crypto::Format::Hex);
+        let hash = crypto.hash(
+            &unsigned_msg.to_string().into_bytes(),
+            crate::crypto::Format::Hex,
+        );
         let kp = crypto.get_key_pair_using_sk(&crate::crypto::HexStringOrBuffer::Hex(
             "c3774b92cc8850fb4026b073081290b82cab3c0f66cac250b4d710ee9aaf83ed8088b37f6f458104515ae18c2a05bde890199322f62ab5114d20c77bde5e6c9d"
                 .into(),

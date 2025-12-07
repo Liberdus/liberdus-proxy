@@ -598,7 +598,10 @@ mod tests {
         let result = collect_http(&mut reader, &mut buffer).await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            result.unwrap_err().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 
     #[tokio::test]
@@ -732,7 +735,10 @@ mod tests {
         let config = Arc::new(config::Config::load().expect("config should load"));
         let liberdus = test_liberdus();
         let sock_map: SocketIdents = Arc::new(RwLock::new(std::collections::HashMap::new()));
-        let subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus.clone()));
+        let subscription_manager = Arc::new(subscription::Manager::new(
+            sock_map.clone(),
+            liberdus.clone(),
+        ));
         subscription_manager
             .insert_subscription_for_test(&"socket-1".to_string(), "acct", 1)
             .await;
@@ -741,12 +747,7 @@ mod tests {
 
         let (mut client_side, server_side) = tokio::io::duplex(1024);
 
-        let handler = handle_stream(
-            server_side,
-            liberdus,
-            subscription_manager.clone(),
-            config,
-        );
+        let handler = handle_stream(server_side, liberdus, subscription_manager.clone(), config);
 
         let client = async {
             client_side
