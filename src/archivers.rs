@@ -6,14 +6,15 @@
 //! allowing seamless integration in a highly concurrent environment.
 use crate::config;
 use crate::crypto::ShardusCrypto;
+use crate::swap_cell::SwapCell;
 use std::fs;
 use std::sync::Arc;
-use tokio::{io::AsyncWriteExt, sync::RwLock};
+use tokio::io::AsyncWriteExt;
 
 pub struct ArchiverUtil {
     config: config::Config,
-    seed_list: Arc<RwLock<Vec<Archiver>>>,
-    active_archivers: Arc<RwLock<Vec<Archiver>>>,
+    seed_list: Arc<SwapCell<Vec<Archiver>>>,
+    active_archivers: Arc<SwapCell<Vec<Archiver>>>,
     crypto: Arc<ShardusCrypto>,
 }
 
@@ -38,8 +39,8 @@ impl Clone for Archiver {
 #[allow(non_snake_case)]
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct SignedArchiverListResponse {
-    activeArchivers: Vec<Archiver>,
-    sign: Signature,
+    pub activeArchivers: Vec<Archiver>,
+    pub sign: Signature,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -56,8 +57,8 @@ impl ArchiverUtil {
 
         ArchiverUtil {
             config,
-            seed_list: Arc::new(RwLock::new(seed)),
-            active_archivers: Arc::new(RwLock::new(Vec::new())),
+            seed_list: Arc::new(SwapCell::new(seed)),
+            active_archivers: Arc::new(SwapCell::new(Vec::new())),
             crypto: sc,
         }
     }
@@ -83,7 +84,7 @@ impl ArchiverUtil {
             Err(_) => Vec::new(),
         };
 
-        cache.extend(self.seed_list.read().await.clone());
+        cache.extend(self.seed_list.get_latest().as_ref().clone());
         cache.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         let (tx, mut rx) =
@@ -154,11 +155,7 @@ impl ArchiverUtil {
 
         let dump = tmp.clone();
 
-        {
-            let mut guard = long_lived_self.active_archivers.write().await;
-            *guard = tmp;
-            drop(guard);
-        }
+        long_lived_self.active_archivers.publish(tmp);
 
         tokio::spawn(async move {
             let mut file = tokio::fs::File::create("known_archiver_cache.json")
@@ -170,7 +167,7 @@ impl ArchiverUtil {
     }
 
     /// Returns the reference counted clone of active archivers list.
-    pub fn get_active_archivers(&self) -> Arc<RwLock<Vec<Archiver>>> {
+    pub fn get_active_archivers(&self) -> Arc<SwapCell<Vec<Archiver>>> {
         self.active_archivers.clone()
     }
 
@@ -208,7 +205,7 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
-    use tokio::sync::Mutex;
+    use tokio::sync::{Mutex, RwLock};
     use tokio::time::timeout;
 
     static CACHE_LOCK: Mutex<()> = Mutex::const_new(());
@@ -363,7 +360,7 @@ Connection: close
         server.await.unwrap();
 
         let active = util.get_active_archivers();
-        let guard = active.read().await;
+        let guard = active.get_latest();
         assert_eq!(guard.len(), 1);
         assert_eq!(guard[0].publicKey, "returned_pk");
         assert_eq!(guard[0].ip, "10.0.0.1");
@@ -414,7 +411,7 @@ Connection: close
         server.await.unwrap();
 
         let active = util.get_active_archivers();
-        let guard = active.read().await;
+        let guard = active.get_latest();
         assert!(guard.is_empty());
         assert!(!std::path::Path::new("known_archiver_cache.json").exists());
     }
