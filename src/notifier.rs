@@ -113,7 +113,7 @@ where
         return Err(Box::new(e));
     }
 
-    return Ok(());
+    Ok(())
 }
 
 pub fn is_notifier_route(route: &str) -> bool {

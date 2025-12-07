@@ -237,119 +237,6 @@ fn insert_field(
     obj
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
-
-    async fn spawn_http_server(body: &'static str) -> (u16, tokio::task::JoinHandle<()>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
-            body.len(),
-            body
-        );
-
-        let handle = tokio::spawn(async move {
-            if let Ok((mut socket, _)) = listener.accept().await {
-                let mut buf = [0u8; 1024];
-                let _ = socket.read(&mut buf).await;
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.shutdown().await;
-            }
-        });
-
-        (port, handle)
-    }
-
-    #[tokio::test]
-    async fn inserts_transaction_ids_when_present() {
-        let (port, server) = spawn_http_server(
-            r#"{"success":true,"transactions":[{"originalTxData":{"tx":{"k":1}},"txId":"abc"}]}"#,
-        )
-        .await;
-
-        let value = get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
-            .await
-            .unwrap();
-
-        server.await.unwrap();
-
-        assert_eq!(
-            value,
-            serde_json::json!({"transactions":[{"k":1,"txId":"abc"}]}),
-            "transaction IDs should be merged into response objects"
-        );
-    }
-
-    #[tokio::test]
-    async fn returns_error_on_failure_response() {
-        let (port, server) =
-            spawn_http_server(r#"{"success":false,"error":"nope","transactions":[]}"#).await;
-
-        let err = get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
-            .await
-            .unwrap_err();
-
-        server.await.unwrap();
-
-        assert_eq!(err, "nope");
-    }
-
-    #[tokio::test]
-    async fn get_transaction_handles_missing() {
-        let (port, server) =
-            spawn_http_server(r#"{"success":false,"error":"not found","transactions":[]}"#).await;
-
-        let tx = get_transaction(&"127.0.0.1".to_string(), &port, &"id".to_string()).await;
-        server.await.unwrap();
-
-        assert!(tx.is_none());
-    }
-
-    #[tokio::test]
-    async fn get_account_by_address_success() {
-        let (port, server) = spawn_http_server(r#"{"accounts":[{"data":{"account":"ok"}}]}"#).await;
-
-        let value = get_account_by_address("127.0.0.1", &port.to_string(), "acct")
-            .await
-            .unwrap();
-
-        server.await.unwrap();
-
-        assert_eq!(value, serde_json::json!({"account":"ok"}));
-    }
-
-    #[tokio::test]
-    async fn get_account_by_address_missing() {
-        let (port, server) = spawn_http_server(r#"{"accounts":[]}"#).await;
-
-        let err = get_account_by_address("127.0.0.1", &port.to_string(), "acct")
-            .await
-            .unwrap_err();
-
-        server.await.unwrap();
-
-        assert_eq!(err, "Account not found");
-    }
-
-    #[test]
-    fn insert_field_merges_keys() {
-        let base = serde_json::json!({"a":1});
-        let updated = insert_field(base, "b", serde_json::json!(2));
-        assert_eq!(updated["a"], 1);
-        assert_eq!(updated["b"], 2);
-    }
-
-    #[test]
-    fn collector_route_recognizer() {
-        assert!(is_collector_route("/collector/foo"));
-        assert!(!is_collector_route("/other"));
-    }
-}
-
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
@@ -526,4 +413,117 @@ where
 
 pub fn is_collector_route(route: &str) -> bool {
     route.starts_with("/collector")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn spawn_http_server(body: &'static str) -> (u16, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let handle = tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = socket.read(&mut buf).await;
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+
+        (port, handle)
+    }
+
+    #[tokio::test]
+    async fn inserts_transaction_ids_when_present() {
+        let (port, server) = spawn_http_server(
+            r#"{"success":true,"transactions":[{"originalTxData":{"tx":{"k":1}},"txId":"abc"}]}"#,
+        )
+        .await;
+
+        let value = get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
+            .await
+            .unwrap();
+
+        server.await.unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({"transactions":[{"k":1,"txId":"abc"}]}),
+            "transaction IDs should be merged into response objects"
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_error_on_failure_response() {
+        let (port, server) =
+            spawn_http_server(r#"{"success":false,"error":"nope","transactions":[]}"#).await;
+
+        let err = get_transaction_history(&"127.0.0.1".to_string(), &port, &"acct".to_string())
+            .await
+            .unwrap_err();
+
+        server.await.unwrap();
+
+        assert_eq!(err, "nope");
+    }
+
+    #[tokio::test]
+    async fn get_transaction_handles_missing() {
+        let (port, server) =
+            spawn_http_server(r#"{"success":false,"error":"not found","transactions":[]}"#).await;
+
+        let tx = get_transaction(&"127.0.0.1".to_string(), &port, &"id".to_string()).await;
+        server.await.unwrap();
+
+        assert!(tx.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_account_by_address_success() {
+        let (port, server) = spawn_http_server(r#"{"accounts":[{"data":{"account":"ok"}}]}"#).await;
+
+        let value = get_account_by_address("127.0.0.1", &port.to_string(), "acct")
+            .await
+            .unwrap();
+
+        server.await.unwrap();
+
+        assert_eq!(value, serde_json::json!({"account":"ok"}));
+    }
+
+    #[tokio::test]
+    async fn get_account_by_address_missing() {
+        let (port, server) = spawn_http_server(r#"{"accounts":[]}"#).await;
+
+        let err = get_account_by_address("127.0.0.1", &port.to_string(), "acct")
+            .await
+            .unwrap_err();
+
+        server.await.unwrap();
+
+        assert_eq!(err, "Account not found");
+    }
+
+    #[test]
+    fn insert_field_merges_keys() {
+        let base = serde_json::json!({"a":1});
+        let updated = insert_field(base, "b", serde_json::json!(2));
+        assert_eq!(updated["a"], 1);
+        assert_eq!(updated["b"], 2);
+    }
+
+    #[test]
+    fn collector_route_recognizer() {
+        assert!(is_collector_route("/collector/foo"));
+        assert!(!is_collector_route("/other"));
+    }
 }

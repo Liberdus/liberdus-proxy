@@ -118,7 +118,7 @@ mod tests {
         let cfg = Config::load().expect("config should parse");
         assert_eq!(cfg.http_port, 3030);
         assert!(cfg.debug);
-        assert_eq!(cfg.tls.enabled, false);
+        assert!(!cfg.tls.enabled);
         assert_eq!(cfg.node_filtering.remove_top_nodes, 3);
     }
 }
