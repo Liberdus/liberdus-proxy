@@ -923,7 +923,7 @@
         ));
         <span class="kw">let </span>liberdus = Arc::new(<span class="kw">crate</span>::liberdus::Liberdus::new(
             crypto,
-            Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            Arc::new(arc_swap::ArcSwap::new(Arc::new(Vec::new()))),
             sample_config(),
         ));
         Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)

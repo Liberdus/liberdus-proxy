@@ -775,7 +775,7 @@
     <span class="kw">fn </span>test_liberdus() -&gt; Arc&lt;liberdus::Liberdus&gt; {
         <span class="kw">let </span>cfg = config::Config::load().expect(<span class="string">"config should load"</span>);
         <span class="kw">let </span>sc = Arc::new(crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed));
-        <span class="kw">let </span>archivers = Arc::new(tokio::sync::RwLock::new(Vec::&lt;archivers::Archiver&gt;::new()));
+        <span class="kw">let </span>archivers = Arc::new(arc_swap::ArcSwap::new(Arc::new(Vec::&lt;archivers::Archiver&gt;::new())));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 
