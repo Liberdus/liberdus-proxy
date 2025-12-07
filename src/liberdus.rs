@@ -590,6 +590,7 @@ use crate::swap_cell::SwapCell;
 
         for i in 0..500 {
             let node = Consensor {
+                foundationNode: Some(false),
                 publicKey: "0x0".to_string(),
                 id: i.to_string(),
                 ip: "0.0.0.0".to_string(),
@@ -703,6 +704,7 @@ use crate::swap_cell::SwapCell;
         let liberdus = sample_liberdus();
         let mut nodes = liberdus.active_nodelist.get_latest().as_ref().clone();
         nodes.push(Consensor {
+            foundationNode: Some(false),
             id: "slow".into(),
             ip: "127.0.0.1".into(),
                 port: 80,
@@ -710,6 +712,7 @@ use crate::swap_cell::SwapCell;
                 rng_bias: None,
             });
             nodes.push(Consensor {
+                foundationNode: Some(false),
                 id: "fast".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
@@ -793,6 +796,7 @@ use crate::swap_cell::SwapCell;
         let mut nodes = vec![];
         for id in 0..4 {
             nodes.push(Consensor {
+                foundationNode: Some(false),
                 id: format!("node{}", id),
                 ip: "127.0.0.1".into(),
                 port: 9,
@@ -871,6 +875,7 @@ use crate::swap_cell::SwapCell;
         let (pk, sk) = sodiumoxide::crypto::sign::gen_keypair();
 
         let nodes = vec![Consensor {
+            foundationNode: Some(false),
             id: "node".into(),
             ip: "127.0.0.1".into(),
             port: 1,
@@ -942,6 +947,7 @@ use crate::swap_cell::SwapCell;
 
         let mut nodes = liberdus.active_nodelist.get_latest().as_ref().clone();
         nodes.push(Consensor {
+            foundationNode: Some(false),
             id: "n1".into(),
             ip: "127.0.0.1".into(),
                 port: cons_port,
@@ -984,6 +990,7 @@ use crate::swap_cell::SwapCell;
         let liberdus = sample_liberdus();
         let mut nodes = liberdus.active_nodelist.get_latest().as_ref().clone();
         nodes.push(Consensor {
+            foundationNode: Some(false),
             id: "fast".into(),
             ip: "127.0.0.1".into(),
                 port,
@@ -1028,6 +1035,7 @@ use crate::swap_cell::SwapCell;
         let liberdus = sample_liberdus();
         let mut nodes = liberdus.active_nodelist.get_latest().as_ref().clone();
         nodes.push(Consensor {
+            foundationNode: Some(false),
             id: "fast".into(),
             ip: "127.0.0.1".into(),
                 port: 9_999,
@@ -1067,6 +1075,7 @@ use crate::swap_cell::SwapCell;
         let liberdus = sample_liberdus();
         let mut nodes = liberdus.active_nodelist.get_latest().as_ref().clone();
         nodes.push(Consensor {
+            foundationNode: Some(false),
             id: "one".into(),
             ip: "127.0.0.1".into(),
                 port: 80,
@@ -1074,6 +1083,7 @@ use crate::swap_cell::SwapCell;
                 rng_bias: None,
             });
             nodes.push(Consensor {
+                foundationNode: Some(false),
                 id: "two".into(),
                 ip: "127.0.0.1".into(),
                 port: 80,
