@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["archivers","collector","config","crypto","http","liberdus","notifier","rpc","shardus_monitor","subscription","tls","ws"],"struct":["Stats"]};
+window.SIDEBAR_ITEMS = {"mod":["archivers","collector","config","crypto","http","liberdus","notifier","rpc","shardus_monitor","subscription","swap_cell","tls","ws"],"struct":["Stats"]};

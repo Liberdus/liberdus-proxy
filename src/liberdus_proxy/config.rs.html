@@ -242,7 +242,7 @@
         <span class="kw">let </span>cfg = Config::load().expect(<span class="string">"config should parse"</span>);
         <span class="macro">assert_eq!</span>(cfg.http_port, <span class="number">3030</span>);
         <span class="macro">assert!</span>(cfg.debug);
-        <span class="macro">assert_eq!</span>(cfg.tls.enabled, <span class="bool-val">false</span>);
+        <span class="macro">assert!</span>(!cfg.tls.enabled);
         <span class="macro">assert_eq!</span>(cfg.node_filtering.remove_top_nodes, <span class="number">3</span>);
     }
 }

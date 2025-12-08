@@ -773,7 +773,8 @@
 <a href="#772" id="772">772</a>
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
-<a href="#775" id="775">775</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
 //! It handles the communication between clients and backend servers (consensors) via a load-balancing system.
@@ -1284,14 +1285,14 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use </span><span class="kw">crate</span>::ws::SocketIdents;
+    <span class="kw">use crate</span>::{swap_cell::SwapCell, ws::SocketIdents};
     <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
     <span class="kw">use </span>tokio::sync::RwLock;
 
     <span class="kw">fn </span>test_liberdus() -&gt; Arc&lt;liberdus::Liberdus&gt; {
         <span class="kw">let </span>cfg = config::Config::load().expect(<span class="string">"config should load"</span>);
         <span class="kw">let </span>sc = Arc::new(<span class="kw">crate</span>::crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed));
-        <span class="kw">let </span>archivers = Arc::new(tokio::sync::RwLock::new(Vec::&lt;<span class="kw">crate</span>::archivers::Archiver&gt;::new()));
+        <span class="kw">let </span>archivers = Arc::new(SwapCell::new(Vec::&lt;<span class="kw">crate</span>::archivers::Archiver&gt;::new()));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 
@@ -1373,7 +1374,10 @@
         <span class="kw">let </span>result = collect_http(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(result.is_err());
-        <span class="macro">assert_eq!</span>(result.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
+        <span class="macro">assert_eq!</span>(
+            result.unwrap_err().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 
     <span class="attr">#[tokio::test]
@@ -1507,7 +1511,10 @@
         <span class="kw">let </span>config = Arc::new(config::Config::load().expect(<span class="string">"config should load"</span>));
         <span class="kw">let </span>liberdus = test_liberdus();
         <span class="kw">let </span>sock_map: SocketIdents = Arc::new(RwLock::new(std::collections::HashMap::new()));
-        <span class="kw">let </span>subscription_manager = Arc::new(subscription::Manager::new(sock_map.clone(), liberdus.clone()));
+        <span class="kw">let </span>subscription_manager = Arc::new(subscription::Manager::new(
+            sock_map.clone(),
+            liberdus.clone(),
+        ));
         subscription_manager
             .insert_subscription_for_test(<span class="kw-2">&amp;</span><span class="string">"socket-1"</span>.to_string(), <span class="string">"acct"</span>, <span class="number">1</span>)
             .<span class="kw">await</span>;
@@ -1516,12 +1523,7 @@
 
         <span class="kw">let </span>(<span class="kw-2">mut </span>client_side, server_side) = tokio::io::duplex(<span class="number">1024</span>);
 
-        <span class="kw">let </span>handler = handle_stream(
-            server_side,
-            liberdus,
-            subscription_manager.clone(),
-            config,
-        );
+        <span class="kw">let </span>handler = handle_stream(server_side, liberdus, subscription_manager.clone(), config);
 
         <span class="kw">let </span>client = <span class="kw">async </span>{
             client_side
