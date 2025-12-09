@@ -16,7 +16,6 @@ pub mod notifier;
 pub mod rpc;
 pub mod shardus_monitor;
 pub mod subscription;
-pub mod swap_cell;
 pub mod tls;
 pub mod ws;
 

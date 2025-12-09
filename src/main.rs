@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Waiting for active nodelist...");
     loop {
-        if lbd.active_nodelist.get_latest().len() > 0 {
+        if lbd.active_nodelist.load().len() > 0 {
             break;
         }
     }
