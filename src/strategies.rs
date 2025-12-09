@@ -6,25 +6,24 @@ use rand::prelude::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct BiasedRandomStrategy {
-    trip_ms: Arc<RwLock<HashMap<String, u128>>>,
-    load_distribution_commulative_bias: Arc<RwLock<Vec<f64>>>,
-    round_robin_index: Arc<AtomicUsize>,
-    list_prepared: Arc<AtomicBool>,
+    trip_ms: RwLock<HashMap<String, u128>>,
+    load_distribution_commulative_bias: RwLock<Vec<f64>>,
+    round_robin_index: AtomicUsize,
+    list_prepared: AtomicBool,
     max_timeout_ms: u128,
 }
 
 impl BiasedRandomStrategy {
     pub fn new(max_timeout_ms: u128) -> Self {
         BiasedRandomStrategy {
-            trip_ms: Arc::new(RwLock::new(HashMap::new())),
-            load_distribution_commulative_bias: Arc::new(RwLock::new(Vec::new())),
-            round_robin_index: Arc::new(AtomicUsize::new(0)),
-            list_prepared: Arc::new(AtomicBool::new(false)),
+            trip_ms: RwLock::new(HashMap::new()),
+            load_distribution_commulative_bias: RwLock::new(Vec::new()),
+            round_robin_index: AtomicUsize::new(0),
+            list_prepared: AtomicBool::new(false),
             max_timeout_ms,
         }
     }
