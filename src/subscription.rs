@@ -382,7 +382,8 @@ pub mod rpc_handler {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::{crypto::ShardusCrypto, swap_cell::SwapCell};
+    use crate::crypto::ShardusCrypto;
+    use arc_swap::ArcSwap;
 
     fn sample_config() -> crate::config::Config {
         crate::config::Config {
@@ -433,7 +434,7 @@ pub(crate) mod tests {
         ));
         let liberdus = Arc::new(crate::liberdus::Liberdus::new(
             crypto,
-            Arc::new(SwapCell::new(Vec::new())),
+            Arc::new(ArcSwap::from_pointee(Vec::new())),
             sample_config(),
         ));
         Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)

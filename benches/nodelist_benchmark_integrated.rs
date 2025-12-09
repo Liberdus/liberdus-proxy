@@ -4,8 +4,8 @@ use liberdus_proxy::{
     config::{self, Config},
     crypto::{self, ShardusCrypto},
     liberdus::{Consensor, Liberdus, SignedNodeListResp},
-    swap_cell::SwapCell,
 };
+use arc_swap::ArcSwap;
 use rand::prelude::*;
 use std::time::Duration;
 use std::{
@@ -20,7 +20,7 @@ use std::{
 use tokio::{runtime::Runtime, sync::RwLock};
 
 fn benchmark_get_consensor(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Integrated Read Latency SwapCell vs RwLock");
+    let mut group = c.benchmark_group("Integrated Read Latency ArcSwap vs RwLock");
     group.measurement_time(Duration::from_secs(120));
 
     let rt = Runtime::new().unwrap();
@@ -63,12 +63,12 @@ fn benchmark_get_consensor(c: &mut Criterion) {
     });
 
     loop {
-        if lbd.active_nodelist.get_latest().len() > 0 {
+        if lbd.active_nodelist.load().len() > 0 {
             break;
         }
     }
 
-    group.bench_function("SwapCell read", |b| {
+    group.bench_function("ArcSwap read", |b| {
         b.to_async(&rt).iter(|| async {
             lbd.get_next_appropriate_consensor().await;
         });
@@ -110,7 +110,7 @@ criterion_main!(benches);
 pub struct LiberdusRwLock {
     pub active_nodelist: Arc<RwLock<Vec<Consensor>>>,
     trip_ms: Arc<RwLock<HashMap<String, u128>>>,
-    archivers: Arc<SwapCell<Vec<archivers::Archiver>>>,
+    archivers: Arc<ArcSwap<Vec<archivers::Archiver>>>,
     round_robin_index: Arc<std::sync::atomic::AtomicUsize>,
     list_prepared: Arc<AtomicBool>,
     crypto: Arc<crypto::ShardusCrypto>,
@@ -121,7 +121,7 @@ pub struct LiberdusRwLock {
 impl LiberdusRwLock {
     pub fn new(
         sc: Arc<crypto::ShardusCrypto>,
-        archivers: Arc<SwapCell<Vec<archivers::Archiver>>>,
+        archivers: Arc<ArcSwap<Vec<archivers::Archiver>>>,
         config: config::Config,
     ) -> Self {
         LiberdusRwLock {
@@ -138,7 +138,7 @@ impl LiberdusRwLock {
 
     /// trigger a full nodelist update from one of the archivers
     pub async fn update_active_nodelist(&self) {
-        let archivers = self.archivers.get_latest();
+        let archivers = self.archivers.load_full();
 
         for archiver in archivers.iter() {
             let url = format!(

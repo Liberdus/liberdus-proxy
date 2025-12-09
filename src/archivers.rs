@@ -6,15 +6,15 @@
 //! allowing seamless integration in a highly concurrent environment.
 use crate::config;
 use crate::crypto::ShardusCrypto;
-use crate::swap_cell::SwapCell;
+use arc_swap::ArcSwap;
 use std::fs;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
 pub struct ArchiverUtil {
     config: config::Config,
-    seed_list: Arc<SwapCell<Vec<Archiver>>>,
-    active_archivers: Arc<SwapCell<Vec<Archiver>>>,
+    seed_list: Arc<ArcSwap<Vec<Archiver>>>,
+    active_archivers: Arc<ArcSwap<Vec<Archiver>>>,
     crypto: Arc<ShardusCrypto>,
 }
 
@@ -57,8 +57,8 @@ impl ArchiverUtil {
 
         ArchiverUtil {
             config,
-            seed_list: Arc::new(SwapCell::new(seed)),
-            active_archivers: Arc::new(SwapCell::new(Vec::new())),
+            seed_list: Arc::new(ArcSwap::from_pointee(seed)),
+            active_archivers: Arc::new(ArcSwap::from_pointee(Vec::new())),
             crypto: sc,
         }
     }
@@ -84,7 +84,7 @@ impl ArchiverUtil {
             Err(_) => Vec::new(),
         };
 
-        cache.extend(self.seed_list.get_latest().as_ref().clone());
+        cache.extend(self.seed_list.load_full().as_ref().clone());
         cache.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         let (tx, mut rx) =
@@ -155,7 +155,7 @@ impl ArchiverUtil {
 
         let dump = tmp.clone();
 
-        long_lived_self.active_archivers.publish(tmp);
+        long_lived_self.active_archivers.store(Arc::new(tmp));
 
         tokio::spawn(async move {
             let mut file = tokio::fs::File::create("known_archiver_cache.json")
@@ -167,7 +167,7 @@ impl ArchiverUtil {
     }
 
     /// Returns the reference counted clone of active archivers list.
-    pub fn get_active_archivers(&self) -> Arc<SwapCell<Vec<Archiver>>> {
+    pub fn get_active_archivers(&self) -> Arc<ArcSwap<Vec<Archiver>>> {
         self.active_archivers.clone()
     }
 
@@ -361,7 +361,7 @@ Connection: close
         server.await.unwrap();
 
         let active = util.get_active_archivers();
-        let guard = active.get_latest();
+        let guard = active.load_full();
         assert_eq!(guard.len(), 1);
         assert_eq!(guard[0].publicKey, "returned_pk");
         assert_eq!(guard[0].ip, "10.0.0.1");
@@ -416,7 +416,7 @@ Connection: close
         server.await.unwrap();
 
         let active = util.get_active_archivers();
-        let guard = active.get_latest();
+        let guard = active.load_full();
         assert!(guard.is_empty());
         assert!(!std::path::Path::new("known_archiver_cache.json").exists());
     }
