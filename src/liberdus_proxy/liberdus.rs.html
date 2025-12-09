@@ -1275,7 +1275,10 @@
 <a href="#1274" id="1274">1274</a>
 <a href="#1275" id="1275">1275</a>
 <a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a></pre></div><pre class="rust"><code><span class="doccomment">//! This module contains the node management logic require for load balancing with consensor nodes
 </span><span class="kw">use </span><span class="kw">crate</span>::crypto;
 <span class="kw">use crate</span>::{archivers, collector, config, http};
 <span class="kw">use </span>arc_swap::ArcSwap;
@@ -1841,7 +1844,6 @@
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt};
     <span class="kw">use </span>tokio::net::TcpListener;
-    
 
     <span class="kw">use </span>arc_swap::ArcSwap;
 
@@ -1961,7 +1963,11 @@
         <span class="kw">let </span>crypto = Arc::new(crypto::ShardusCrypto::new(
             <span class="string">"64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347"</span>,
         ));
-        Liberdus::new(crypto, Arc::new(ArcSwap::from_pointee(Vec::new())), sample_config())
+        Liberdus::new(
+            crypto,
+            Arc::new(ArcSwap::from_pointee(Vec::new())),
+            sample_config(),
+        )
     }
 
     <span class="attr">#[test]
