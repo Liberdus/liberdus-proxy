@@ -501,15 +501,15 @@
 //! allowing seamless integration in a highly concurrent environment.
 </span><span class="kw">use </span><span class="kw">crate</span>::config;
 <span class="kw">use </span><span class="kw">crate</span>::crypto::ShardusCrypto;
-<span class="kw">use </span><span class="kw">crate</span>::swap_cell::SwapCell;
+<span class="kw">use </span>arc_swap::ArcSwap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 
 <span class="kw">pub struct </span>ArchiverUtil {
     config: config::Config,
-    seed_list: Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt;,
-    active_archivers: Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    seed_list: Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt;,
+    active_archivers: Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt;,
     crypto: Arc&lt;ShardusCrypto&gt;,
 }
 
@@ -552,8 +552,8 @@
 
         ArchiverUtil {
             config,
-            seed_list: Arc::new(SwapCell::new(seed)),
-            active_archivers: Arc::new(SwapCell::new(Vec::new())),
+            seed_list: Arc::new(ArcSwap::from_pointee(seed)),
+            active_archivers: Arc::new(ArcSwap::from_pointee(Vec::new())),
             crypto: sc,
         }
     }
@@ -579,7 +579,7 @@
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Vec::new(),
         };
 
-        cache.extend(<span class="self">self</span>.seed_list.get_latest().as_ref().clone());
+        cache.extend(<span class="self">self</span>.seed_list.load_full().as_ref().clone());
         cache.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         <span class="kw">let </span>(tx, <span class="kw-2">mut </span>rx) =
@@ -650,7 +650,7 @@
 
         <span class="kw">let </span>dump = tmp.clone();
 
-        long_lived_self.active_archivers.publish(tmp);
+        long_lived_self.active_archivers.store(Arc::new(tmp));
 
         tokio::spawn(<span class="kw">async move </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>file = tokio::fs::File::create(<span class="string">"known_archiver_cache.json"</span>)
@@ -662,7 +662,7 @@
     }
 
     <span class="doccomment">/// Returns the reference counted clone of active archivers list.
-    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;SwapCell&lt;Vec&lt;Archiver&gt;&gt;&gt; {
+    </span><span class="kw">pub fn </span>get_active_archivers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ArcSwap&lt;Vec&lt;Archiver&gt;&gt;&gt; {
         <span class="self">self</span>.active_archivers.clone()
     }
 
@@ -856,7 +856,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.get_latest();
+        <span class="kw">let </span>guard = active.load_full();
         <span class="macro">assert_eq!</span>(guard.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].publicKey, <span class="string">"returned_pk"</span>);
         <span class="macro">assert_eq!</span>(guard[<span class="number">0</span>].ip, <span class="string">"10.0.0.1"</span>);
@@ -911,7 +911,7 @@ Connection: close
         server.<span class="kw">await</span>.unwrap();
 
         <span class="kw">let </span>active = util.get_active_archivers();
-        <span class="kw">let </span>guard = active.get_latest();
+        <span class="kw">let </span>guard = active.load_full();
         <span class="macro">assert!</span>(guard.is_empty());
         <span class="macro">assert!</span>(!std::path::Path::new(<span class="string">"known_archiver_cache.json"</span>).exists());
     }

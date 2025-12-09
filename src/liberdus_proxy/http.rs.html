@@ -774,7 +774,10 @@
 <a href="#773" id="773">773</a>
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
-<a href="#776" id="776">776</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a></pre></div><pre class="rust"><code><span class="doccomment">//! # Client Request Handler Module
 //!
 //! This module defines the core logic for handling client requests in a TCP-based system.
 //! It handles the communication between clients and backend servers (consensors) via a load-balancing system.
@@ -1285,14 +1288,17 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use crate</span>::{swap_cell::SwapCell, ws::SocketIdents};
+    <span class="kw">use </span><span class="kw">crate</span>::ws::SocketIdents;
+    <span class="kw">use </span>arc_swap::ArcSwap;
     <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
     <span class="kw">use </span>tokio::sync::RwLock;
 
     <span class="kw">fn </span>test_liberdus() -&gt; Arc&lt;liberdus::Liberdus&gt; {
         <span class="kw">let </span>cfg = config::Config::load().expect(<span class="string">"config should load"</span>);
         <span class="kw">let </span>sc = Arc::new(<span class="kw">crate</span>::crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed));
-        <span class="kw">let </span>archivers = Arc::new(SwapCell::new(Vec::&lt;<span class="kw">crate</span>::archivers::Archiver&gt;::new()));
+        <span class="kw">let </span>archivers = Arc::new(ArcSwap::from_pointee(
+            Vec::&lt;<span class="kw">crate</span>::archivers::Archiver&gt;::new(),
+        ));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 

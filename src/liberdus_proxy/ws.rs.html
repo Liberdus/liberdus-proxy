@@ -437,7 +437,10 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{config, liberdus, Stats};
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{config, liberdus, Stats};
 <span class="kw">use crate</span>::{rpc, subscription};
 <span class="kw">use </span>futures_util::{SinkExt, StreamExt};
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
@@ -771,14 +774,17 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use crate</span>::{archivers, config, crypto, swap_cell::SwapCell};
+    <span class="kw">use crate</span>::{archivers, config, crypto};
+    <span class="kw">use </span>arc_swap::ArcSwap;
     <span class="kw">use </span>tokio::net::TcpListener;
     <span class="kw">use </span>tokio_tungstenite::tungstenite::protocol::Message;
 
     <span class="kw">fn </span>test_liberdus() -&gt; Arc&lt;liberdus::Liberdus&gt; {
         <span class="kw">let </span>cfg = config::Config::load().expect(<span class="string">"config should load"</span>);
         <span class="kw">let </span>sc = Arc::new(crypto::ShardusCrypto::new(<span class="kw-2">&amp;</span>cfg.crypto_seed));
-        <span class="kw">let </span>archivers = Arc::new(SwapCell::new(Vec::&lt;archivers::Archiver&gt;::new()));
+        <span class="kw">let </span>archivers = Arc::new(ArcSwap::from_pointee(
+            Vec::&lt;archivers::Archiver&gt;::new(),
+        ));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 

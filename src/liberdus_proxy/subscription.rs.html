@@ -482,7 +482,8 @@
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
 <a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
@@ -866,7 +867,8 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
-    <span class="kw">use crate</span>::{crypto::ShardusCrypto, swap_cell::SwapCell};
+    <span class="kw">use </span><span class="kw">crate</span>::crypto::ShardusCrypto;
+    <span class="kw">use </span>arc_swap::ArcSwap;
 
     <span class="kw">fn </span>sample_config() -&gt; <span class="kw">crate</span>::config::Config {
         <span class="kw">crate</span>::config::Config {
@@ -917,7 +919,7 @@
         ));
         <span class="kw">let </span>liberdus = Arc::new(<span class="kw">crate</span>::liberdus::Liberdus::new(
             crypto,
-            Arc::new(SwapCell::new(Vec::new())),
+            Arc::new(ArcSwap::from_pointee(Vec::new())),
             sample_config(),
         ));
         Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)
