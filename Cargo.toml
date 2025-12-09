@@ -17,6 +17,7 @@ tokio-tungstenite = { version = "0.26.0", features = ["tokio-rustls"] }
 futures-util = "0.3.31"
 url = "2.5.4"
 futures = "0.3.31"
+async-trait = "0.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
