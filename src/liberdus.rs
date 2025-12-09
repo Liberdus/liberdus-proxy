@@ -564,7 +564,6 @@ mod tests {
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
-    
 
     use arc_swap::ArcSwap;
 
@@ -684,7 +683,11 @@ mod tests {
         let crypto = Arc::new(crypto::ShardusCrypto::new(
             "64f152869ca2d473e4ba64ab53f49ccdb2edae22da192c126850970e788af347",
         ));
-        Liberdus::new(crypto, Arc::new(ArcSwap::from_pointee(Vec::new())), sample_config())
+        Liberdus::new(
+            crypto,
+            Arc::new(ArcSwap::from_pointee(Vec::new())),
+            sample_config(),
+        )
     }
 
     #[test]

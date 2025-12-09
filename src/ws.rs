@@ -340,9 +340,7 @@ mod tests {
     fn test_liberdus() -> Arc<liberdus::Liberdus> {
         let cfg = config::Config::load().expect("config should load");
         let sc = Arc::new(crypto::ShardusCrypto::new(&cfg.crypto_seed));
-        let archivers = Arc::new(ArcSwap::from_pointee(
-            Vec::<archivers::Archiver>::new(),
-        ));
+        let archivers = Arc::new(ArcSwap::from_pointee(Vec::<archivers::Archiver>::new()));
         Arc::new(liberdus::Liberdus::new(sc, archivers, cfg))
     }
 

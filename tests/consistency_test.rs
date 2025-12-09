@@ -28,7 +28,7 @@ async fn test_nodelist_consistency_lockstep() {
         loop {
             if let Ok((mut stream, _)) = listener.accept().await {
                 let crypto = crypto_clone.clone();
-                let pk = pk.clone();
+                let pk = pk;
                 let sk = sk.clone();
                 let ver = server_version.load(Ordering::SeqCst);
 
@@ -114,11 +114,7 @@ async fn test_nodelist_consistency_lockstep() {
     config.max_http_timeout_ms = 500;
     config.nodelist_refresh_interval_sec = 1;
 
-    let liberdus = Arc::new(liberdus::Liberdus::new(
-        crypto.clone(),
-        archivers,
-        config,
-    ));
+    let liberdus = Arc::new(liberdus::Liberdus::new(crypto.clone(), archivers, config));
 
     // 3. Lock-step Test Loop
     let num_readers = 10;
@@ -162,7 +158,10 @@ async fn test_nodelist_consistency_lockstep() {
         }
     }
 
-    println!("Successfully verified {} iterations with {} lock-step readers each.", iterations, num_readers);
+    println!(
+        "Successfully verified {} iterations with {} lock-step readers each.",
+        iterations, num_readers
+    );
     server_handle.abort();
 }
 
@@ -176,10 +175,7 @@ fn signed_node_list_with_keys(
         "nodeList": nodes.clone(),
     });
 
-    let hash = crypto.hash(
-        &unsigned_msg.to_string().into_bytes(),
-        crypto::Format::Hex,
-    );
+    let hash = crypto.hash(&unsigned_msg.to_string().into_bytes(), crypto::Format::Hex);
     let sig_bytes = crypto
         .sign(hash, sk)
         .expect("signature")
