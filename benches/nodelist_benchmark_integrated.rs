@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use criterion::{criterion_group, criterion_main, Criterion};
 use liberdus_proxy::{
     archivers::{self, ArchiverUtil},
@@ -5,7 +6,6 @@ use liberdus_proxy::{
     crypto::{self, ShardusCrypto},
     liberdus::{Consensor, Liberdus, SignedNodeListResp},
 };
-use arc_swap::ArcSwap;
 use rand::prelude::*;
 use std::time::Duration;
 use std::{

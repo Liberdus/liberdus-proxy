@@ -1,10 +1,10 @@
+use arc_swap::ArcSwap;
 use criterion::{criterion_group, criterion_main, Criterion};
 use liberdus_proxy::liberdus::Consensor;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
-use arc_swap::ArcSwap;
 
 const NODELIST_SIZE: usize = 20_000;
 
