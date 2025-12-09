@@ -196,8 +196,7 @@
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::liberdus::Consensor;
+<a href="#198" id="198">198</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::liberdus::Consensor;
 <span class="kw">use </span><span class="kw">crate</span>::load_balancer::LoadBalancer;
 <span class="kw">use </span><span class="kw">crate</span>::swap_cell::SwapCell;
 <span class="kw">use </span>async_trait::async_trait;
@@ -205,25 +204,24 @@
 <span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicBool, AtomicUsize, Ordering <span class="kw">as </span>AtomicOrdering};
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>BiasedRandomStrategy {
-    trip_ms: Arc&lt;RwLock&lt;HashMap&lt;String, u128&gt;&gt;&gt;,
-    load_distribution_commulative_bias: Arc&lt;RwLock&lt;Vec&lt;f64&gt;&gt;&gt;,
-    round_robin_index: Arc&lt;AtomicUsize&gt;,
-    list_prepared: Arc&lt;AtomicBool&gt;,
+    trip_ms: RwLock&lt;HashMap&lt;String, u128&gt;&gt;,
+    load_distribution_commulative_bias: RwLock&lt;Vec&lt;f64&gt;&gt;,
+    round_robin_index: AtomicUsize,
+    list_prepared: AtomicBool,
     max_timeout_ms: u128,
 }
 
 <span class="kw">impl </span>BiasedRandomStrategy {
     <span class="kw">pub fn </span>new(max_timeout_ms: u128) -&gt; <span class="self">Self </span>{
         BiasedRandomStrategy {
-            trip_ms: Arc::new(RwLock::new(HashMap::new())),
-            load_distribution_commulative_bias: Arc::new(RwLock::new(Vec::new())),
-            round_robin_index: Arc::new(AtomicUsize::new(<span class="number">0</span>)),
-            list_prepared: Arc::new(AtomicBool::new(<span class="bool-val">false</span>)),
+            trip_ms: RwLock::new(HashMap::new()),
+            load_distribution_commulative_bias: RwLock::new(Vec::new()),
+            round_robin_index: AtomicUsize::new(<span class="number">0</span>),
+            list_prepared: AtomicBool::new(<span class="bool-val">false</span>),
             max_timeout_ms,
         }
     }
