@@ -382,14 +382,14 @@ pub mod rpc_handler {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::crypto::ShardusCrypto;
-    use arc_swap::ArcSwap;
-    use std::sync::Arc;
-    use std::collections::HashMap;
-    use tokio::sync::mpsc;
     use crate::config;
-    use crate::ws;
+    use crate::crypto::ShardusCrypto;
     use crate::liberdus;
+    use crate::ws;
+    use arc_swap::ArcSwap;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
 
     fn sample_config() -> crate::config::Config {
         crate::config::Config {
@@ -580,7 +580,9 @@ pub(crate) mod tests {
         let account = "acc1".to_string();
 
         // Insert manually to set timestamp
-        manager.insert_subscription_for_test(&sock_id, &account, 100).await;
+        manager
+            .insert_subscription_for_test(&sock_id, &account, 100)
+            .await;
 
         // Setup channel to receive notification
         let (tx, mut rx) = mpsc::unbounded_channel();
