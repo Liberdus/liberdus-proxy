@@ -384,6 +384,12 @@ pub(crate) mod tests {
     use super::*;
     use crate::crypto::ShardusCrypto;
     use arc_swap::ArcSwap;
+    use std::sync::Arc;
+    use std::collections::HashMap;
+    use tokio::sync::mpsc;
+    use crate::config;
+    use crate::ws;
+    use crate::liberdus;
 
     fn sample_config() -> crate::config::Config {
         crate::config::Config {
@@ -481,5 +487,184 @@ pub(crate) mod tests {
 
         let msg = rx.try_recv().expect("notification should be emitted");
         assert_eq!(msg.result.unwrap()["account_id"], "acct");
+    }
+
+    fn create_test_manager() -> Manager {
+        let config = config::Config::default();
+        let crypto = Arc::new(ShardusCrypto::new(&config.crypto_seed));
+        let archivers = Arc::new(ArcSwap::from_pointee(Vec::new()));
+        let liberdus = Arc::new(liberdus::Liberdus::new(crypto, archivers, config));
+
+        Manager::new(Arc::new(tokio::sync::RwLock::new(HashMap::new())), liberdus)
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_success() {
+        let manager = create_test_manager();
+        let sock_id = "sock1".to_string();
+        let account = "acc1".to_string();
+
+        let result = manager.subscribe(&sock_id, &account).await;
+        assert!(result);
+
+        let guard = manager.states.read().await;
+        assert!(guard.accounts_by_sock.contains_key(&sock_id));
+        assert!(guard.socks_by_account.contains_key(&account));
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_duplicate() {
+        let manager = create_test_manager();
+        let sock_id = "sock1".to_string();
+        let account = "acc1".to_string();
+
+        manager.subscribe(&sock_id, &account).await;
+        let result = manager.subscribe(&sock_id, &account).await;
+        assert!(!result); // Should return false if already exists
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribe_success() {
+        let manager = create_test_manager();
+        let sock_id = "sock1".to_string();
+        let account = "acc1".to_string();
+
+        manager.subscribe(&sock_id, &account).await;
+        let result = manager.unsubscribe(&sock_id, &account).await;
+        assert!(result);
+
+        let guard = manager.states.read().await;
+        // Should be empty as it was the only subscription
+        assert!(!guard.accounts_by_sock.contains_key(&sock_id));
+        assert!(!guard.socks_by_account.contains_key(&account));
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribe_non_existent() {
+        let manager = create_test_manager();
+        let result = manager.unsubscribe(&"sock1".to_string(), "acc1").await;
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribe_all() {
+        let manager = create_test_manager();
+        let sock_id = "sock1".to_string();
+        manager.subscribe(&sock_id, "acc1").await;
+        manager.subscribe(&sock_id, "acc2").await;
+
+        manager.unsubscribe_all(&sock_id).await;
+
+        let guard = manager.states.read().await;
+        assert!(!guard.accounts_by_sock.contains_key(&sock_id));
+        assert!(!guard.socks_by_account.contains_key("acc1"));
+        assert!(!guard.socks_by_account.contains_key("acc2"));
+    }
+
+    #[tokio::test]
+    async fn test_get_all_subscriptions() {
+        let manager = create_test_manager();
+        manager.subscribe(&"s1".to_string(), "a1").await;
+        manager.subscribe(&"s2".to_string(), "a2").await;
+
+        let subs = manager.get_all_subscriptions().await;
+        assert_eq!(subs.len(), 2);
+        assert!(subs.contains(&"a1".to_string()));
+        assert!(subs.contains(&"a2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_listen_account_update_callback_ignore_old_timestamp() {
+        let manager = Arc::new(create_test_manager());
+        let sock_id = "sock1".to_string();
+        let account = "acc1".to_string();
+
+        // Insert manually to set timestamp
+        manager.insert_subscription_for_test(&sock_id, &account, 100).await;
+
+        // Setup channel to receive notification
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        manager.socket_map.write().await.insert(sock_id.clone(), tx);
+
+        // Send update with older timestamp (50 < 100)
+        let payload = serde_json::json!({
+            "event": "accountUpdate",
+            "data": serde_json::to_string(&serde_json::json!({
+                "accountId": account,
+                "timestamp": 50,
+                "data": {"data": {"chatTimestamp": 50}}
+            })).unwrap()
+        });
+
+        listen_account_update_callback(payload, manager.clone()).await;
+
+        // Should NOT receive anything
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_rpc_handler_subscribe() {
+        let manager = Arc::new(create_test_manager());
+        let sock_id = "sock1".to_string();
+
+        // Note: rpc_handler::handle_subscriptions assumes the method was already checked/dispatched
+        // but it reads params to determine action. Wait, looking at src/subscription.rs:
+        // match req.params[0].as_str()...
+        // It does not use req.method.
+        // However, we need to construct a valid WebsocketIncoming struct.
+        // WebsocketIncoming = RpcRequest<Methods>. Methods is enum.
+
+        // But in src/ws.rs:
+        // pub type WebsocketIncoming = crate::rpc::RpcRequest<Methods>;
+        // enum Methods { ChatEvent, GetSubscriptions }
+
+        // src/subscription.rs uses `req.params[0]` to distinguish Subscribe/Unsubscribe.
+        // The method field in request usually routes to `handle_subscriptions`.
+        // src/rpc.rs maps `Methods::ChatEvent` to `handle_subscriptions`.
+
+        let req = ws::WebsocketIncoming {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: ws::Methods::ChatEvent,
+            params: vec![serde_json::json!("subscribe"), serde_json::json!("acc1")],
+        };
+
+        let resp = rpc_handler::handle_subscriptions(req, manager.clone(), sock_id.clone()).await;
+
+        assert_eq!(resp.error, None);
+        // assert!(resp.result.unwrap().get("subscription_status").unwrap().as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_rpc_handler_unsubscribe() {
+        let manager = Arc::new(create_test_manager());
+        let sock_id = "sock1".to_string();
+        manager.subscribe(&sock_id, "acc1").await;
+
+        let req = ws::WebsocketIncoming {
+            id: 1,
+            jsonrpc: "2.0".to_string(),
+            method: ws::Methods::ChatEvent,
+            params: vec![serde_json::json!("unsubscribe"), serde_json::json!("acc1")],
+        };
+
+        let resp = rpc_handler::handle_subscriptions(req, manager.clone(), sock_id.clone()).await;
+
+        assert_eq!(resp.error, None);
+    }
+
+    #[test]
+    fn test_subscription_actions_from_str() {
+        let sub = SubscriptionActions::from("subscribe");
+        assert!(matches!(sub, SubscriptionActions::Subscribe));
+
+        let unsub = SubscriptionActions::from("unsubscribe");
+        assert!(matches!(unsub, SubscriptionActions::Unsubscribe));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_subscription_actions_invalid() {
+        let _ = SubscriptionActions::from("invalid");
     }
 }
