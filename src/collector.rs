@@ -419,7 +419,7 @@ pub fn is_collector_route(route: &str) -> bool {
 mod tests {
     use super::*;
     use crate::config;
-    use crate::http;
+    
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
