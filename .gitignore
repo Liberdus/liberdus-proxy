@@ -25,3 +25,4 @@ Cargo.lock
 /target
 
 known_archiver_cache.json
+/coverage_reports

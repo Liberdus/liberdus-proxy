@@ -109,6 +109,12 @@ impl Config {
     }
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Config::load().expect("Default config should load from src/config.json")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

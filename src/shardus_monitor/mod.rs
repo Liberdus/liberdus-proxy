@@ -1,5 +1,8 @@
 pub mod proxy;
 
+#[cfg(test)]
+mod tests;
+
 // allow snake case
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

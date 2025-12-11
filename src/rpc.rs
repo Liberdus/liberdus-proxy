@@ -23,7 +23,7 @@ pub struct RpcResponse {
     pub error: Option<RpcError>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RpcError {
     pub code: i32,
     pub message: String,

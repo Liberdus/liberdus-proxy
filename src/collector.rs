@@ -418,14 +418,93 @@ pub fn is_collector_route(route: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config;
+
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    // Mock stream that writes to a buffer and reads from a buffer
+    struct MockStream {
+        read_data: std::io::Cursor<Vec<u8>>,
+        write_data: Vec<u8>,
+    }
+
+    impl MockStream {
+        fn new(input: Vec<u8>) -> Self {
+            Self {
+                read_data: std::io::Cursor::new(input),
+                write_data: Vec::new(),
+            }
+        }
+    }
+
+    impl tokio::io::AsyncRead for MockStream {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            std::pin::Pin::new(&mut self.read_data).poll_read(cx, buf)
+        }
+    }
+
+    impl tokio::io::AsyncWrite for MockStream {
+        fn poll_write(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            let len = buf.len();
+            self.write_data.extend_from_slice(buf);
+            std::task::Poll::Ready(Ok(len))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+    }
 
     async fn spawn_http_server(body: &'static str) -> (u16, tokio::task::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let handle = tokio::spawn(async move {
+            if let Ok((mut socket, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = socket.read(&mut buf).await;
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+        });
+
+        (port, handle)
+    }
+
+    // Helper to spawn a dummy server for handle_request tests
+    async fn spawn_collector_server(
+        body: &'static str,
+        status: u16,
+    ) -> (u16, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let response = format!(
+            "HTTP/1.1 {} OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+            status,
             body.len(),
             body
         );
@@ -525,5 +604,108 @@ mod tests {
     fn collector_route_recognizer() {
         assert!(is_collector_route("/collector/foo"));
         assert!(!is_collector_route("/other"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_success() {
+        let (port, server) = spawn_collector_server(r#"{"success":true}"#, 200).await;
+
+        let mut config = config::Config::default();
+        config.local_source.collector_api_ip = "127.0.0.1".to_string();
+        config.local_source.collector_api_port = port;
+        let config = Arc::new(config);
+
+        let request = "GET /collector/foo HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut client_stream = MockStream::new(vec![]);
+
+        let res = handle_request(request.as_bytes().to_vec(), &mut client_stream, config).await;
+
+        assert!(res.is_ok());
+        let response = String::from_utf8(client_stream.write_data).unwrap();
+        assert!(response.contains("HTTP/1.1 200 OK"));
+        assert!(response.contains(r#"{"success":true}"#));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_connection_refused() {
+        let mut config = config::Config::default();
+        config.local_source.collector_api_ip = "127.0.0.1".to_string();
+        config.local_source.collector_api_port = 1; // Closed port
+        config.max_http_timeout_ms = 100;
+        let config = Arc::new(config);
+
+        let request = "GET /collector/foo HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        let mut client_stream = MockStream::new(vec![]);
+
+        let res = handle_request(request.as_bytes().to_vec(), &mut client_stream, config).await;
+
+        assert!(res.is_err());
+        let response = String::from_utf8(client_stream.write_data).unwrap();
+        // expect timeout response
+        assert!(
+            response.contains("HTTP/1.1 408 Request Timeout")
+                || response.contains("HTTP/1.1 500 Internal Server Error")
+                || response.contains("HTTP/1.1 504 Gateway Timeout")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_receipt_success() {
+        let (port, server) = spawn_collector_server(r#"{"success":true}"#, 200).await;
+
+        let res = get_receipt("127.0.0.1", &port, "txhash").await;
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), serde_json::json!({"success":true}));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_receipt_failure() {
+        let (port, server) = spawn_collector_server(r#"{"error":"bad"}"#, 500).await;
+
+        let res = get_receipt("127.0.0.1", &port, "txhash").await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("HTTP error: 500"));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_success() {
+        let (port, server) = spawn_collector_server(
+            r#"{"success":true, "transactions": [{"originalTxData": {"tx": "data"}, "txId": "1"}]}"#,
+            200,
+        )
+        .await;
+
+        let res = get_transaction(&"127.0.0.1".to_string(), &port, &"1".to_string()).await;
+        assert!(res.is_some());
+        assert_eq!(res.unwrap(), serde_json::json!("data"));
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_fail_success_false() {
+        let (port, server) =
+            spawn_collector_server(r#"{"success":false, "transactions": []}"#, 200).await;
+
+        let res = get_transaction(&"127.0.0.1".to_string(), &port, &"1".to_string()).await;
+        assert!(res.is_none());
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_http_error() {
+        let (port, server) = spawn_collector_server("", 404).await;
+
+        let res = get_transaction(&"127.0.0.1".to_string(), &port, &"1".to_string()).await;
+        assert!(res.is_none());
+
+        server.await.unwrap();
     }
 }
