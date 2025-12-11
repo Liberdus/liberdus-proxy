@@ -16,10 +16,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
+    - name: Install Rust components
+      run: rustup component add clippy rustfmt
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+    - name: Build (Debug)
       run: cargo build --verbose
+    - name: Build (Release)
+      run: cargo build --release --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Run Clippy
+      run: cargo clippy 
     - name: Generate docs
       run: cargo doc --no-deps
 
@@ -28,7 +36,9 @@ jobs:
 
 
     - name: Deploy to gh-pages
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./target/doc/
+
