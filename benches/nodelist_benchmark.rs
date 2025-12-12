@@ -4,7 +4,6 @@ use liberdus_proxy::liberdus::Consensor;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tokio::sync::RwLock;
 
 const NODELIST_SIZE: usize = 20_000;
 
@@ -22,37 +21,12 @@ fn generate_test_nodelist(size: usize) -> Vec<Consensor> {
 }
 
 fn benchmark_read_latency(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Read Latency With and Without Write Contentions");
+    let mut group = c.benchmark_group("Read Latency Under Write Contentions");
 
-    group.measurement_time(Duration::from_secs(20));
+    group.measurement_time(Duration::from_secs(5));
 
     let runtime = Runtime::new().unwrap();
 
-    // --- RwLock Benchmark ---
-    let rwlock_nodelist = Arc::new(RwLock::new(generate_test_nodelist(NODELIST_SIZE)));
-    let rwlock_clone = rwlock_nodelist.clone();
-    let rwlock_handle = runtime.spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_nanos(1));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
-        loop {
-            interval.tick().await;
-            let new_list = generate_test_nodelist(NODELIST_SIZE);
-            {
-                let mut guard = rwlock_clone.write().await;
-                *guard = new_list;
-            }
-        }
-    });
-
-    group.bench_function("RwLock Read", |b| {
-        b.to_async(&runtime).iter(|| async {
-            let _guard = rwlock_nodelist.read().await;
-        });
-    });
-
-    rwlock_handle.abort();
-
-    // --- ArcSwap Benchmark ---
     let arcswap_nodelist = Arc::new(ArcSwap::from_pointee(generate_test_nodelist(NODELIST_SIZE)));
     let arcswap_clone = arcswap_nodelist.clone();
     let arcswap_handle = runtime.spawn(async move {
@@ -65,9 +39,15 @@ fn benchmark_read_latency(c: &mut Criterion) {
         }
     });
 
-    group.bench_function("ArcSwap Read", |b| {
+    group.bench_function("ArcSwap load_full()", |b| {
         b.iter(|| {
             let _guard = arcswap_nodelist.load_full();
+        });
+    });
+
+    group.bench_function("ArcSwap load()", |b| {
+        b.iter(|| {
+            let _guard = arcswap_nodelist.load();
         });
     });
 
