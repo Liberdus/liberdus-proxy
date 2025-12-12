@@ -6,7 +6,6 @@ use rand::prelude::*;
 use serde::{self, Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     sync::{
         atomic::{AtomicBool, AtomicUsize},
         Arc,
@@ -15,7 +14,9 @@ use std::{
     u128,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use tokio::{net::TcpStream, sync::RwLock, time::timeout};
+use tokio::{net::TcpStream, time::timeout};
+
+use scc;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[allow(non_snake_case)]
@@ -47,12 +48,12 @@ pub struct Signature {
 
 pub struct Liberdus {
     pub active_nodelist: Arc<ArcSwap<Vec<Consensor>>>,
-    trip_ms: Arc<RwLock<HashMap<String, u128>>>,
+    trip_ms: Arc<scc::HashMap<String, u128>>,
     archivers: Arc<ArcSwap<Vec<archivers::Archiver>>>,
     round_robin_index: Arc<AtomicUsize>,
     list_prepared: Arc<AtomicBool>,
     crypto: Arc<crypto::ShardusCrypto>,
-    load_distribution_commulative_bias: Arc<RwLock<Vec<f64>>>,
+    load_distribution_commulative_bias: Arc<ArcSwap<Vec<f64>>>,
     config: Arc<config::Config>,
 }
 
@@ -65,12 +66,12 @@ impl Liberdus {
         Liberdus {
             config: Arc::new(config),
             round_robin_index: Arc::new(AtomicUsize::new(0)),
-            trip_ms: Arc::new(RwLock::new(HashMap::new())),
+            trip_ms: Arc::new(scc::HashMap::new()),
             active_nodelist: Arc::new(ArcSwap::from_pointee(Vec::new())),
             list_prepared: Arc::new(AtomicBool::new(false)),
             archivers,
             crypto: sc,
-            load_distribution_commulative_bias: Arc::new(RwLock::new(Vec::new())),
+            load_distribution_commulative_bias: Arc::new(ArcSwap::from_pointee(Vec::new())),
         }
     }
 
@@ -153,14 +154,10 @@ impl Liberdus {
                     // inititally node list does not contain load data.
                     self.list_prepared
                         .store(false, std::sync::atomic::Ordering::Relaxed);
-                    {
-                        let mut guard = self.load_distribution_commulative_bias.write().await;
-                        *guard = Vec::new();
-                    }
-                    {
-                        let mut guard = self.trip_ms.write().await;
-                        *guard = HashMap::new();
-                    }
+
+                    self.load_distribution_commulative_bias.store(Arc::new(Vec::new()));
+
+                    self.trip_ms.clear();
                     break;
                 }
                 Err(_e) => {
@@ -289,25 +286,23 @@ impl Liberdus {
         }
 
         let nodes = self.active_nodelist.load_full();
-
-        let trip_ms = {
-            let guard = self.trip_ms.read().await;
-            guard.clone()
-        };
+        let trip_ms = &self.trip_ms;
 
         let max_timeout = self.config.max_http_timeout_ms.try_into().unwrap_or(4000); // 3 seconds
         let mut sorted_nodes = nodes.as_ref().clone();
 
+        // since trip_ms is highly concurrent and lock-free, we can just access it directly.
+        // scc::HashMap is designed for high concurrency.
         sorted_nodes.sort_by(|a, b| {
-            let a_time = trip_ms.get(&a.id).unwrap_or(&max_timeout);
-            let b_time = trip_ms.get(&b.id).unwrap_or(&max_timeout);
-            a_time.cmp(b_time)
+            let a_time = trip_ms.get(&a.id).map(|entry| *entry.get()).unwrap_or(max_timeout);
+            let b_time = trip_ms.get(&b.id).map(|entry| *entry.get()).unwrap_or(max_timeout);
+            a_time.cmp(&b_time)
         });
 
         let mut total_bias = 0.0;
         let mut cumulative_bias = Vec::new();
         for node in &mut sorted_nodes {
-            let last_http_round_trip = *trip_ms.get(&node.id).unwrap_or(&max_timeout);
+            let last_http_round_trip = trip_ms.get(&node.id).map(|entry| *entry.get()).unwrap_or(max_timeout);
             let bias = self.calculate_bias(last_http_round_trip, max_timeout);
             node.rng_bias = Some(bias);
             total_bias += node.rng_bias.unwrap_or(0.0);
@@ -315,11 +310,7 @@ impl Liberdus {
         }
 
         self.active_nodelist.store(Arc::new(sorted_nodes));
-
-        {
-            let mut guard = self.load_distribution_commulative_bias.write().await;
-            *guard = cumulative_bias;
-        }
+        self.load_distribution_commulative_bias.store(Arc::new(cumulative_bias));
 
         self.list_prepared
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -338,7 +329,7 @@ impl Liberdus {
         }
 
         let nodes = self.active_nodelist.load_full();
-        let cumulative_weights = self.load_distribution_commulative_bias.read().await.clone();
+        let cumulative_weights = self.load_distribution_commulative_bias.load_full();
 
         if nodes.is_empty() || cumulative_weights.is_empty() {
             return None;
@@ -385,9 +376,7 @@ impl Liberdus {
             .load(std::sync::atomic::Ordering::Relaxed)
             && (self
                 .load_distribution_commulative_bias
-                .read()
-                .await
-                .clone()
+                .load()
                 .len()
                 == self.active_nodelist.load().len())
         {
@@ -421,13 +410,7 @@ impl Liberdus {
             return;
         }
 
-        let trip_ms_map = self.trip_ms.clone();
-
-        tokio::spawn(async move {
-            let mut guard = trip_ms_map.write().await;
-            guard.insert(node_id, trip_ms);
-            drop(guard);
-        });
+        let _ = self.trip_ms.upsert(node_id, trip_ms);
     }
 
     fn verify_signature(&self, signed_payload: &SignedNodeListResp) -> bool {
@@ -623,8 +606,7 @@ mod tests {
             "Cumulative weight {}",
             liberdus
                 .load_distribution_commulative_bias
-                .read()
-                .await
+                .load()
                 .last()
                 .unwrap()
         );
@@ -721,9 +703,8 @@ mod tests {
         liberdus.active_nodelist.store(Arc::new(nodes));
 
         {
-            let mut trips = liberdus.trip_ms.write().await;
-            trips.insert("slow".into(), 900);
-            trips.insert("fast".into(), 10);
+            let _ = liberdus.trip_ms.upsert("slow".into(), 900);
+            let _ = liberdus.trip_ms.upsert("fast".into(), 10);
         }
 
         liberdus.prepare_list().await;
@@ -734,9 +715,7 @@ mod tests {
 
         let dist = liberdus
             .load_distribution_commulative_bias
-            .read()
-            .await
-            .clone();
+            .load_full();
         assert_eq!(dist.len(), 2);
         assert!(liberdus
             .list_prepared
@@ -866,8 +845,7 @@ mod tests {
         assert!(list.iter().all(|n| n.id == "node1" || n.id == "node2"));
         assert!(liberdus
             .load_distribution_commulative_bias
-            .read()
-            .await
+            .load()
             .is_empty());
     }
 
@@ -963,9 +941,7 @@ mod tests {
         liberdus.active_nodelist.store(Arc::new(nodes));
         liberdus
             .load_distribution_commulative_bias
-            .write()
-            .await
-            .push(1.0);
+            .store(Arc::new(vec![1.0]));
         liberdus
             .list_prepared
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1007,9 +983,7 @@ mod tests {
         liberdus.active_nodelist.store(Arc::new(nodes));
         liberdus
             .load_distribution_commulative_bias
-            .write()
-            .await
-            .push(1.0);
+            .store(Arc::new(vec![1.0]));
         liberdus
             .list_prepared
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1052,9 +1026,7 @@ mod tests {
         liberdus.active_nodelist.store(Arc::new(nodes));
         liberdus
             .load_distribution_commulative_bias
-            .write()
-            .await
-            .push(1.0);
+            .store(Arc::new(vec![1.0]));
         liberdus
             .list_prepared
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1100,9 +1072,8 @@ mod tests {
         liberdus.active_nodelist.store(Arc::new(nodes));
 
         {
-            let mut trips = liberdus.trip_ms.write().await;
-            trips.insert("one".into(), 50);
-            trips.insert("two".into(), 10);
+            let _ = liberdus.trip_ms.upsert("one".into(), 50);
+            let _ = liberdus.trip_ms.upsert("two".into(), 10);
         }
 
         let first = liberdus.get_next_appropriate_consensor().await.unwrap();

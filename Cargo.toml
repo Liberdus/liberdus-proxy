@@ -18,6 +18,7 @@ futures-util = "0.3.31"
 url = "2.5.4"
 futures = "0.3.31"
 arc-swap = "1.7.1"
+scc = "2.2.3"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
