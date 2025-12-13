@@ -148,11 +148,6 @@ impl Liberdus {
 
                     self.active_nodelist.store(Arc::new(nodelist));
 
-                    self.round_robin_index
-                        .store(0, std::sync::atomic::Ordering::Relaxed);
-                    // inititally node list does not contain load data.
-                    self.list_prepared
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
                     {
                         let mut guard = self.load_distribution_commulative_bias.write().await;
                         *guard = Vec::new();
@@ -161,6 +156,12 @@ impl Liberdus {
                         let mut guard = self.trip_ms.write().await;
                         *guard = HashMap::new();
                     }
+
+                    self.round_robin_index
+                        .store(0, std::sync::atomic::Ordering::Release);
+                    // inititally node list does not contain load data.
+                    self.list_prepared
+                        .store(false, std::sync::atomic::Ordering::Release);
                     break;
                 }
                 Err(_e) => {
@@ -322,7 +323,7 @@ impl Liberdus {
         }
 
         self.list_prepared
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     /// Selects a random node from the active list based on weighted bias
@@ -332,7 +333,7 @@ impl Liberdus {
     async fn get_random_consensor_biased(&self) -> Option<(usize, Consensor)> {
         if !self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
         {
             return None;
         }
@@ -351,9 +352,9 @@ impl Liberdus {
         if total_bias == 0.0 {
             let idx = rng.gen_range(0..nodes.len());
             self.round_robin_index
-                .store(0, std::sync::atomic::Ordering::Relaxed);
+                .store(0, std::sync::atomic::Ordering::Release);
             self.list_prepared
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+                .store(false, std::sync::atomic::Ordering::Release);
             return Some((idx, nodes[idx].clone()));
         }
 
@@ -382,7 +383,7 @@ impl Liberdus {
         }
         match self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
             && (self
                 .load_distribution_commulative_bias
                 .read()
@@ -395,7 +396,7 @@ impl Liberdus {
             false => {
                 let index = self
                     .round_robin_index
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .fetch_add(1, std::sync::atomic::Ordering::Acquire);
 
                 let nodes = self.active_nodelist.load_full();
                 if index >= nodes.len() {
@@ -416,7 +417,7 @@ impl Liberdus {
         // list already prepared on the first round robin,  no need to keep recording rtt for nodes
         if self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
         {
             return;
         }

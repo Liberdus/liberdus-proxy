@@ -97,21 +97,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _archivers = Arc::clone(&arch_utils);
     let _liberdus = Arc::clone(&lbd);
 
-    tokio::spawn(async move {
-        Arc::clone(&_archivers).discover().await;
-        _liberdus.update_active_nodelist().await;
+    // first time archiver and nodelist queries
+    Arc::clone(&_archivers).discover().await;
+    _liberdus.update_active_nodelist().await;
 
-        let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(
-            _configs.nodelist_refresh_interval_sec,
-        ));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    {
+        // schedule a background task that refresh nodelist
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(
+                _configs.nodelist_refresh_interval_sec,
+            ));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-        loop {
-            ticker.tick().await;
-            Arc::clone(&_archivers).discover().await;
-            _liberdus.update_active_nodelist().await;
-        }
-    });
+            loop {
+                ticker.tick().await;
+                _liberdus.update_active_nodelist().await;
+            }
+        });
+
+
+        // schedule a background task that refresh archiver list
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(
+                _configs.nodelist_refresh_interval_sec * 2,
+            ));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+            loop {
+                ticker.tick().await;
+                Arc::clone(&_archivers).discover().await;
+            }
+        });
+    }
 
     println!("Waiting for active nodelist...");
     loop {
