@@ -1,15 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use liberdus_proxy::{
-    archivers::{ArchiverUtil},
-    config::{Config},
-    crypto::{ShardusCrypto},
-    liberdus::Liberdus,
+    archivers::ArchiverUtil, config::Config, crypto::ShardusCrypto, liberdus::Liberdus,
 };
 use std::time::Duration;
-use std::{
-    fs,
-    sync::Arc,
-};
+use std::{fs, sync::Arc};
 use tokio::runtime::Runtime;
 
 fn benchmark_get_consensor(c: &mut Criterion) {

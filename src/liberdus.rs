@@ -496,24 +496,20 @@ impl Liberdus {
         );
 
         // tcp handshakes shouldn't take more than a second
-        let mut server_stream = match timeout(
-            Duration::from_millis(1000_u64),
-            TcpStream::connect(ip_port),
-        )
-        .await
-        {
-            Ok(Ok(stream)) => stream,
-            Ok(Err(e)) => {
-                eprintln!("Error connecting to target server: {}", e);
-                self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
-                return Err(Box::new(e));
-            }
-            Err(_) => {
-                eprintln!("Timeout connecting to target server.");
-                self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
-                return Err("Timeout connecting to target server".into());
-            }
-        };
+        let mut server_stream =
+            match timeout(Duration::from_millis(1000_u64), TcpStream::connect(ip_port)).await {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    eprintln!("Error connecting to target server: {}", e);
+                    self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                    return Err(Box::new(e));
+                }
+                Err(_) => {
+                    eprintln!("Timeout connecting to target server.");
+                    self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                    return Err("Timeout connecting to target server".into());
+                }
+            };
 
         // Forward the request and collect response
         let now = std::time::Instant::now();
