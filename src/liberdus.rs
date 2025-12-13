@@ -491,7 +491,7 @@ impl Liberdus {
 
         // tcp handshakes shouldn't take more than a second
         let mut server_stream = match timeout(
-            Duration::from_millis(500 as u64),
+            Duration::from_millis(1000 as u64),
             TcpStream::connect(ip_port),
         )
         .await
@@ -1307,7 +1307,7 @@ where
         match liberdus.send(request_buffer.clone()).await {
             Ok(response) => break response,
             Err(e) => {
-                if retry < 3 { retry += 1; sleep(Duration::from_millis(1)).await; continue; }
+                if retry < 3 { retry += 1; sleep(Duration::from_millis(100)).await; continue; }
                 eprintln!("Error sending request through liberdus: {}", e);
                 let error_str = e.to_string();
                 println!("{}",error_str);
