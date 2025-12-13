@@ -15,6 +15,7 @@ use std::{
     u128,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::time::sleep;
 use tokio::{net::TcpStream, sync::RwLock, time::timeout};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
@@ -148,11 +149,6 @@ impl Liberdus {
 
                     self.active_nodelist.store(Arc::new(nodelist));
 
-                    self.round_robin_index
-                        .store(0, std::sync::atomic::Ordering::Relaxed);
-                    // inititally node list does not contain load data.
-                    self.list_prepared
-                        .store(false, std::sync::atomic::Ordering::Relaxed);
                     {
                         let mut guard = self.load_distribution_commulative_bias.write().await;
                         *guard = Vec::new();
@@ -161,6 +157,12 @@ impl Liberdus {
                         let mut guard = self.trip_ms.write().await;
                         *guard = HashMap::new();
                     }
+
+                    self.round_robin_index
+                        .store(0, std::sync::atomic::Ordering::Release);
+                    // inititally node list does not contain load data.
+                    self.list_prepared
+                        .store(false, std::sync::atomic::Ordering::Release);
                     break;
                 }
                 Err(_e) => {
@@ -322,7 +324,7 @@ impl Liberdus {
         }
 
         self.list_prepared
-            .store(true, std::sync::atomic::Ordering::Relaxed);
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     /// Selects a random node from the active list based on weighted bias
@@ -332,7 +334,7 @@ impl Liberdus {
     async fn get_random_consensor_biased(&self) -> Option<(usize, Consensor)> {
         if !self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
         {
             return None;
         }
@@ -351,9 +353,9 @@ impl Liberdus {
         if total_bias == 0.0 {
             let idx = rng.gen_range(0..nodes.len());
             self.round_robin_index
-                .store(0, std::sync::atomic::Ordering::Relaxed);
+                .store(0, std::sync::atomic::Ordering::Release);
             self.list_prepared
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+                .store(false, std::sync::atomic::Ordering::Release);
             return Some((idx, nodes[idx].clone()));
         }
 
@@ -382,7 +384,7 @@ impl Liberdus {
         }
         match self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
             && (self
                 .load_distribution_commulative_bias
                 .read()
@@ -395,7 +397,7 @@ impl Liberdus {
             false => {
                 let index = self
                     .round_robin_index
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    .fetch_add(1, std::sync::atomic::Ordering::Acquire);
 
                 let nodes = self.active_nodelist.load_full();
                 if index >= nodes.len() {
@@ -412,11 +414,30 @@ impl Liberdus {
         }
     }
 
+    pub async fn get_next_appropriate_consensor_with_retry(
+        &self,
+        max_retry: u32,
+    ) -> Option<(usize, Consensor)> {
+        let mut retry = 0;
+        loop {
+            if let Some(respond) = self.get_next_appropriate_consensor().await {
+                return Some(respond);
+            }
+
+            if retry > max_retry {
+                return None;
+            }
+
+            retry += 1;
+            sleep(Duration::from_millis(1)).await;
+        }
+    }
+
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128) {
         // list already prepared on the first round robin,  no need to keep recording rtt for nodes
         if self
             .list_prepared
-            .load(std::sync::atomic::Ordering::Relaxed)
+            .load(std::sync::atomic::Ordering::Acquire)
         {
             return;
         }
@@ -452,6 +473,98 @@ impl Liberdus {
                 .to_vec(),
             &pk,
         )
+    }
+
+    /// Sends a request buffer to an appropriate consensor and returns the response buffer
+    /// This method abstracts the consensor selection, connection, and request/response handling
+    pub async fn send(
+        &self,
+        request_buffer: Vec<u8>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        // Get the next appropriate consensor
+        let (_, target_server) = match self.get_next_appropriate_consensor_with_retry(2).await {
+            Some(consensor) => consensor,
+            None => {
+                return Err("No consensors available after 3 retries".into());
+            }
+        };
+
+        let ip_port = format!(
+            "{}:{}",
+            target_server.ip.clone(),
+            target_server.port.clone()
+        );
+
+        // tcp handshakes shouldn't take more than a second
+        let mut server_stream =
+            match timeout(Duration::from_millis(1000_u64), TcpStream::connect(ip_port)).await {
+                Ok(Ok(stream)) => stream,
+                Ok(Err(e)) => {
+                    eprintln!("Error connecting to target server: {}", e);
+                    self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                    return Err(Box::new(e));
+                }
+                Err(_) => {
+                    eprintln!("Timeout connecting to target server.");
+                    self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                    return Err("Timeout connecting to target server".into());
+                }
+            };
+
+        // Forward the request and collect response
+        let now = std::time::Instant::now();
+        let mut response_data = vec![];
+        match timeout(
+            Duration::from_millis(1000_u64),
+            server_stream.write_all(&request_buffer),
+        )
+        .await
+        {
+            Ok(Ok(())) => match http::collect_http(&mut server_stream, &mut response_data).await {
+                Ok(()) => {
+                    let elapsed = now.elapsed();
+                    self.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
+                    tokio::spawn(async move {
+                        let _ = server_stream.shutdown().await;
+                        drop(server_stream);
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Error reading response from server: {}", e);
+                    self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                    tokio::spawn(async move {
+                        let _ = server_stream.shutdown().await;
+                        drop(server_stream);
+                    });
+                    return Err(Box::new(e));
+                }
+            },
+            Ok(Err(e)) => {
+                eprintln!("Error forwarding request to server: {}", e);
+                self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                tokio::spawn(async move {
+                    let _ = server_stream.shutdown().await;
+                    drop(server_stream);
+                });
+                return Err(Box::new(e));
+            }
+            Err(_) => {
+                eprintln!("Timeout forwarding request to server.");
+                self.set_consensor_trip_ms(target_server.id, self.config.max_http_timeout_ms);
+                tokio::spawn(async move {
+                    let _ = server_stream.shutdown().await;
+                    drop(server_stream);
+                });
+                return Err("Timeout forwarding request to server".into());
+            }
+        }
+
+        if response_data.is_empty() {
+            eprintln!("Empty response from server.");
+            return Err("Empty response from server".into());
+        }
+
+        Ok(response_data)
     }
 
     pub async fn get_account_by_address(
@@ -1116,6 +1229,48 @@ mod tests {
             .load(std::sync::atomic::Ordering::Relaxed));
     }
 
+    #[tokio::test]
+    async fn test_send_method() {
+        let mut cfg = sample_config();
+        cfg.max_http_timeout_ms = 2_000;
+
+        let ok_body = "ok";
+        let (server_handle, port) = start_http_server(format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+            ok_body.len(),
+            ok_body
+        ))
+        .await;
+
+        let liberdus = sample_liberdus();
+        let mut nodes = liberdus.active_nodelist.load_full().as_ref().clone();
+        nodes.push(Consensor {
+            foundationNode: Some(false),
+            id: "fast".into(),
+            ip: "127.0.0.1".into(),
+            port,
+            publicKey: String::new(),
+            rng_bias: Some(1.0),
+        });
+        liberdus.active_nodelist.store(Arc::new(nodes));
+        liberdus
+            .load_distribution_commulative_bias
+            .write()
+            .await
+            .push(1.0);
+        liberdus
+            .list_prepared
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+
+        let request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
+
+        let response = liberdus.send(request).await.expect("send should succeed");
+        let response_str = std::str::from_utf8(&response).unwrap();
+        assert!(response_str.contains("ok"));
+
+        server_handle.abort();
+    }
+
     #[test]
     fn old_receipt_route_variants() {
         assert_eq!(
@@ -1149,100 +1304,31 @@ pub async fn handle_request<S>(
 where
     S: AsyncWrite + AsyncRead + Unpin + Send,
 {
-    // Get the next appropriate consensor from liberdus
-    let (_, target_server) = match liberdus.get_next_appropriate_consensor().await {
-        Some(consensor) => consensor,
-        None => {
-            eprintln!("No consensors available.");
-            http::respond_with_internal_error(client_stream).await?;
-            return Err("No consensors available".into());
-        }
-    };
-
-    let ip_port = format!(
-        "{}:{}",
-        target_server.ip.clone(),
-        target_server.port.clone()
-    );
-
-    let mut server_stream = match timeout(
-        Duration::from_millis(config.max_http_timeout_ms as u64),
-        TcpStream::connect(ip_port),
-    )
-    .await
-    {
-        Ok(Ok(stream)) => stream,
-        Ok(Err(e)) => {
-            eprintln!("Error connecting to target server: {}", e);
-            http::respond_with_timeout(client_stream).await?;
-            return Err(Box::new(e));
-        }
-        Err(_) => {
-            eprintln!("Timeout connecting to target server.");
-            http::respond_with_timeout(client_stream).await?;
-            return Err("Timeout connecting to target server".into());
-        }
-    };
-
-    // Forward the client's request to the server
-    let now = std::time::Instant::now();
-    let mut response_data = vec![];
-    match timeout(
-        Duration::from_millis(config.max_http_timeout_ms as u64),
-        server_stream.write_all(&request_buffer),
-    )
-    .await
-    {
-        Ok(Ok(())) => match http::collect_http(&mut server_stream, &mut response_data).await {
-            Ok(()) => {
-                let elapsed = now.elapsed();
-                liberdus.set_consensor_trip_ms(target_server.id, elapsed.as_millis());
-                tokio::spawn(async move {
-                    server_stream.shutdown().await.unwrap();
-                    drop(server_stream);
-                });
-            }
+    let mut retry = 0;
+    let mut response_data = loop {
+        match liberdus.send(request_buffer.clone()).await {
+            Ok(response) => break response,
             Err(e) => {
-                eprintln!("Error reading response from server: {}", e);
-                http::respond_with_internal_error(client_stream).await?;
-                liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-                tokio::spawn(async move {
-                    server_stream.shutdown().await.unwrap();
-                    drop(server_stream);
-                });
-                return Err(Box::new(e));
+                if retry < 2 {
+                    retry += 1;
+                    sleep(Duration::from_millis(500)).await;
+                    continue;
+                }
+                eprintln!("Error sending request through liberdus: {}", e);
+                let error_str = e.to_string();
+                println!("{}", error_str);
+                if error_str.contains("Timeout")
+                    || error_str.contains("timeout")
+                    || error_str.contains("Connection refused")
+                {
+                    http::respond_with_timeout(client_stream).await?;
+                } else {
+                    http::respond_with_internal_error(client_stream).await?;
+                }
+                return Err(e);
             }
-        },
-        Ok(Err(e)) => {
-            eprintln!("Error forwarding request to server: {}", e);
-            http::respond_with_internal_error(client_stream).await?;
-            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-            tokio::spawn(async move {
-                server_stream.shutdown().await.unwrap();
-                drop(server_stream);
-            });
-            return Err(Box::new(e));
         }
-        Err(_) => {
-            eprintln!("Timeout forwarding request to server.");
-            http::respond_with_timeout(client_stream).await?;
-            liberdus.set_consensor_trip_ms(target_server.id, config.max_http_timeout_ms);
-            tokio::spawn(async move {
-                server_stream.shutdown().await.unwrap();
-                drop(server_stream);
-            });
-            return Err("Timeout forwarding request to server".into());
-        }
-    }
-    println!("Successfully forwarded request to server.");
-
-    drop(request_buffer);
-
-    if response_data.is_empty() {
-        eprintln!("Empty response from server.");
-        http::respond_with_internal_error(client_stream).await?;
-        return Err("Empty response from server".into());
-    }
+    };
 
     http::set_http_header(&mut response_data, "Connection", "keep-alive");
     http::set_http_header(

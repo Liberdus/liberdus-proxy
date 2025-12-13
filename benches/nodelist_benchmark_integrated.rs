@@ -1,23 +1,10 @@
-use arc_swap::ArcSwap;
 use criterion::{criterion_group, criterion_main, Criterion};
 use liberdus_proxy::{
-    archivers::{self, ArchiverUtil},
-    config::{self, Config},
-    crypto::{self, ShardusCrypto},
-    liberdus::{Consensor, Liberdus, SignedNodeListResp},
+    archivers::ArchiverUtil, config::Config, crypto::ShardusCrypto, liberdus::Liberdus,
 };
-use rand::prelude::*;
 use std::time::Duration;
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    fs,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
-};
-use tokio::{runtime::Runtime, sync::RwLock};
+use std::{fs, sync::Arc};
+use tokio::runtime::Runtime;
 
 fn benchmark_get_consensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("Integrated Get Next Server");
@@ -70,15 +57,12 @@ fn benchmark_get_consensor(c: &mut Criterion) {
     }
 
     group.bench_function("Reads", |b| {
-        b.to_async(&rt).iter(|| async {
-            lbd.get_next_appropriate_consensor().await 
-        });
+        b.to_async(&rt)
+            .iter(|| async { lbd.get_next_appropriate_consensor().await });
     });
 
     bg1.abort();
-
 }
 
 criterion_group!(benches, benchmark_get_consensor);
 criterion_main!(benches);
-
