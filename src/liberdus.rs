@@ -476,7 +476,7 @@ impl Liberdus {
     /// This method abstracts the consensor selection, connection, and request/response handling
     pub async fn send(&self, request_buffer: Vec<u8>) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         // Get the next appropriate consensor
-        let (_, target_server) = match self.get_next_appropriate_consensor_with_retry(3).await {
+        let (_, target_server) = match self.get_next_appropriate_consensor_with_retry(2).await {
             Some(consensor) => consensor,
             None => {
                 return Err("No consensors available after 3 retries".into());
@@ -1307,7 +1307,7 @@ where
         match liberdus.send(request_buffer.clone()).await {
             Ok(response) => break response,
             Err(e) => {
-                if retry < 3 { retry += 1; sleep(Duration::from_millis(200)).await; continue; }
+                if retry < 2 { retry += 1; sleep(Duration::from_millis(500)).await; continue; }
                 eprintln!("Error sending request through liberdus: {}", e);
                 let error_str = e.to_string();
                 println!("{}",error_str);
