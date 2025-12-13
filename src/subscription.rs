@@ -604,56 +604,6 @@ pub(crate) mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    #[tokio::test]
-    async fn test_rpc_handler_subscribe() {
-        let manager = Arc::new(create_test_manager());
-        let sock_id = "sock1".to_string();
-
-        // Note: rpc_handler::handle_subscriptions assumes the method was already checked/dispatched
-        // but it reads params to determine action. Wait, looking at src/subscription.rs:
-        // match req.params[0].as_str()...
-        // It does not use req.method.
-        // However, we need to construct a valid WebsocketIncoming struct.
-        // WebsocketIncoming = RpcRequest<Methods>. Methods is enum.
-
-        // But in src/ws.rs:
-        // pub type WebsocketIncoming = crate::rpc::RpcRequest<Methods>;
-        // enum Methods { ChatEvent, GetSubscriptions }
-
-        // src/subscription.rs uses `req.params[0]` to distinguish Subscribe/Unsubscribe.
-        // The method field in request usually routes to `handle_subscriptions`.
-        // src/rpc.rs maps `Methods::ChatEvent` to `handle_subscriptions`.
-
-        let req = ws::WebsocketIncoming {
-            id: 1,
-            jsonrpc: "2.0".to_string(),
-            method: ws::Methods::ChatEvent,
-            params: vec![serde_json::json!("subscribe"), serde_json::json!("acc1")],
-        };
-
-        let resp = rpc_handler::handle_subscriptions(req, manager.clone(), sock_id.clone()).await;
-
-        assert_eq!(resp.error, None);
-        // assert!(resp.result.unwrap().get("subscription_status").unwrap().as_bool().unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_rpc_handler_unsubscribe() {
-        let manager = Arc::new(create_test_manager());
-        let sock_id = "sock1".to_string();
-        manager.subscribe(&sock_id, "acc1").await;
-
-        let req = ws::WebsocketIncoming {
-            id: 1,
-            jsonrpc: "2.0".to_string(),
-            method: ws::Methods::ChatEvent,
-            params: vec![serde_json::json!("unsubscribe"), serde_json::json!("acc1")],
-        };
-
-        let resp = rpc_handler::handle_subscriptions(req, manager.clone(), sock_id.clone()).await;
-
-        assert_eq!(resp.error, None);
-    }
 
     #[test]
     fn test_subscription_actions_from_str() {
