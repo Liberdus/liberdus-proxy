@@ -497,7 +497,7 @@ impl Liberdus {
 
         // tcp handshakes shouldn't take more than a second
         let mut server_stream = match timeout(
-            Duration::from_millis(1000 as u64),
+            Duration::from_millis(1000_u64),
             TcpStream::connect(ip_port),
         )
         .await
@@ -519,7 +519,7 @@ impl Liberdus {
         let now = std::time::Instant::now();
         let mut response_data = vec![];
         match timeout(
-            Duration::from_millis(1000 as u64),
+            Duration::from_millis(1000_u64),
             server_stream.write_all(&request_buffer),
         )
         .await

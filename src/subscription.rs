@@ -385,7 +385,7 @@ pub(crate) mod tests {
     use crate::config;
     use crate::crypto::ShardusCrypto;
     use crate::liberdus;
-    use crate::ws;
+    
     use arc_swap::ArcSwap;
     use std::collections::HashMap;
     use std::sync::Arc;
