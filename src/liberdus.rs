@@ -1307,7 +1307,7 @@ where
         match liberdus.send(request_buffer.clone()).await {
             Ok(response) => break response,
             Err(e) => {
-                if retry < 3 { retry += 1; sleep(Duration::from_millis(100)).await; continue; }
+                if retry < 3 { retry += 1; sleep(Duration::from_millis(200)).await; continue; }
                 eprintln!("Error sending request through liberdus: {}", e);
                 let error_str = e.to_string();
                 println!("{}",error_str);
@@ -1320,8 +1320,6 @@ where
             }
         }
     };
-
-    println!("Successfully forwarded request to server.");
 
     http::set_http_header(&mut response_data, "Connection", "keep-alive");
     http::set_http_header(
