@@ -4,6 +4,7 @@ use crate::{archivers, collector, config, http};
 use arc_swap::ArcSwap;
 use rand::prelude::*;
 use serde::{self, Deserialize, Serialize};
+use tokio::time::sleep;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -425,6 +426,7 @@ impl Liberdus {
             }
 
             retry += 1;
+            sleep(Duration::from_millis(1)).await;
         };
     }
 
@@ -1305,9 +1307,10 @@ where
         match liberdus.send(request_buffer.clone()).await {
             Ok(response) => break response,
             Err(e) => {
-                if retry < 3 { retry += 1; continue; }
+                if retry < 3 { retry += 1; sleep(Duration::from_millis(1)).await; continue; }
                 eprintln!("Error sending request through liberdus: {}", e);
                 let error_str = e.to_string();
+                println!("{}",error_str);
                 if error_str.contains("Timeout") || error_str.contains("timeout") || error_str.contains("Connection refused") {
                     http::respond_with_timeout(client_stream).await?;
                 } else {
