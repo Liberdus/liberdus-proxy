@@ -115,7 +115,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
 
-
         // schedule a background task that refresh archiver list
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(

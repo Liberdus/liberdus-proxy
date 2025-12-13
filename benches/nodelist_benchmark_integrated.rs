@@ -70,15 +70,12 @@ fn benchmark_get_consensor(c: &mut Criterion) {
     }
 
     group.bench_function("Reads", |b| {
-        b.to_async(&rt).iter(|| async {
-            lbd.get_next_appropriate_consensor().await 
-        });
+        b.to_async(&rt)
+            .iter(|| async { lbd.get_next_appropriate_consensor().await });
     });
 
     bg1.abort();
-
 }
 
 criterion_group!(benches, benchmark_get_consensor);
 criterion_main!(benches);
-

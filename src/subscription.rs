@@ -604,7 +604,6 @@ pub(crate) mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-
     #[test]
     fn test_subscription_actions_from_str() {
         let sub = SubscriptionActions::from("subscribe");

@@ -4,7 +4,6 @@ use crate::{archivers, collector, config, http};
 use arc_swap::ArcSwap;
 use rand::prelude::*;
 use serde::{self, Deserialize, Serialize};
-use tokio::time::sleep;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -16,6 +15,7 @@ use std::{
     u128,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::time::sleep;
 use tokio::{net::TcpStream, sync::RwLock, time::timeout};
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
@@ -414,7 +414,10 @@ impl Liberdus {
         }
     }
 
-    pub async fn get_next_appropriate_consensor_with_retry(&self, max_retry: u32) -> Option<(usize, Consensor)> {
+    pub async fn get_next_appropriate_consensor_with_retry(
+        &self,
+        max_retry: u32,
+    ) -> Option<(usize, Consensor)> {
         let mut retry = 0;
         loop {
             if let Some(respond) = self.get_next_appropriate_consensor().await {
@@ -427,7 +430,7 @@ impl Liberdus {
 
             retry += 1;
             sleep(Duration::from_millis(1)).await;
-        };
+        }
     }
 
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128) {
@@ -474,7 +477,10 @@ impl Liberdus {
 
     /// Sends a request buffer to an appropriate consensor and returns the response buffer
     /// This method abstracts the consensor selection, connection, and request/response handling
-    pub async fn send(&self, request_buffer: Vec<u8>) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn send(
+        &self,
+        request_buffer: Vec<u8>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         // Get the next appropriate consensor
         let (_, target_server) = match self.get_next_appropriate_consensor_with_retry(2).await {
             Some(consensor) => consensor,
@@ -1261,7 +1267,7 @@ mod tests {
             .store(true, std::sync::atomic::Ordering::Relaxed);
 
         let request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".to_vec();
-        
+
         let response = liberdus.send(request).await.expect("send should succeed");
         let response_str = std::str::from_utf8(&response).unwrap();
         assert!(response_str.contains("ok"));
@@ -1307,11 +1313,18 @@ where
         match liberdus.send(request_buffer.clone()).await {
             Ok(response) => break response,
             Err(e) => {
-                if retry < 2 { retry += 1; sleep(Duration::from_millis(500)).await; continue; }
+                if retry < 2 {
+                    retry += 1;
+                    sleep(Duration::from_millis(500)).await;
+                    continue;
+                }
                 eprintln!("Error sending request through liberdus: {}", e);
                 let error_str = e.to_string();
-                println!("{}",error_str);
-                if error_str.contains("Timeout") || error_str.contains("timeout") || error_str.contains("Connection refused") {
+                println!("{}", error_str);
+                if error_str.contains("Timeout")
+                    || error_str.contains("timeout")
+                    || error_str.contains("Connection refused")
+                {
                     http::respond_with_timeout(client_stream).await?;
                 } else {
                     http::respond_with_internal_error(client_stream).await?;
