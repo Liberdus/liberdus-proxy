@@ -113,8 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _liberdus = Arc::clone(&lbd);
 
     tokio::spawn(async move {
-        Arc::clone(&_archivers).discover().await;
-        _liberdus.update_active_nodelist().await;
+
 
         let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(
             _configs.nodelist_refresh_interval_sec,
@@ -133,6 +132,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if lbd.active_nodelist.read().await.len() > 0 {
             break;
         }
+        // Prevent busy-wait CPU spinning
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
     let config = Arc::new(_configs);
@@ -144,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _stats = Arc::clone(&server_stats);
 
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(1));
+        let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(500));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {

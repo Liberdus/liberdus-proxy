@@ -71,6 +71,9 @@ where
         // Read into the temporary buffer
         let n = stream.read(&mut temp_buffer).await?;
         if n == 0 {
+            if buffer.is_empty() {
+                return Ok(());
+            }
             if !headers_read {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::UnexpectedEof,
@@ -145,7 +148,7 @@ where
             Ok(Ok(())) => {
                 // Check for empty requests
                 if req_buf.is_empty() {
-                    eprintln!("[{}] [HTTP_ERROR] IP: {} | Received empty request", get_timestamp(), client_addr);
+                    // Client closed connection cleanly
                     break;
                 }
                 
