@@ -141,6 +141,7 @@ impl ArchiverUtil {
             }
         }
 
+        tmp.sort_by(|a, b| a.publicKey.cmp(&b.publicKey));
         tmp.dedup_by(|a, b| a.publicKey == b.publicKey);
 
         if long_lived_self.config.standalone_network.enabled {
