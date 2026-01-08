@@ -134,6 +134,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if lbd.active_nodelist.load().len() > 0 {
             break;
         }
+        // Prevent busy-wait CPU spinning
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
     let config = Arc::new(_configs);
@@ -146,7 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(tokio::time::Duration::from_millis(500));
-        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
             ticker.tick().await;
