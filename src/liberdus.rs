@@ -466,7 +466,6 @@ impl Liberdus {
         }
         result
     }
-    
 
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128) {
         // list already prepared on the first round robin,  no need to keep recording rtt for nodes
@@ -1406,16 +1405,13 @@ pub async fn handle_request_robust<S>(
 where
     S: AsyncWrite + AsyncRead + Unpin + Send,
 {
-    let result = match crate::robust_query::robust_query(
-        &liberdus,
-        request_buffer,
-        &config,
-    ).await {
+    let result = match crate::robust_query::robust_query(&liberdus, request_buffer, &config).await {
         Ok(r) => r,
         Err(e) => {
             eprintln!("Robust query failed: {}", e);
             let error_str = e.to_string();
-            if error_str.contains("Timeout") || error_str.contains("timeout")
+            if error_str.contains("Timeout")
+                || error_str.contains("timeout")
                 || error_str.contains("Connection refused")
             {
                 http::respond_with_timeout(client_stream).await?;

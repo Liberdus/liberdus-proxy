@@ -146,7 +146,10 @@ pub async fn robust_query(
 
         if batch.is_empty() {
             if verbose {
-                eprintln!("[robust_query] iteration {}: no new unique nodes available, breaking", tries);
+                eprintln!(
+                    "[robust_query] iteration {}: no new unique nodes available, breaking",
+                    tries
+                );
             }
             break; // ran out of nodes
         }
@@ -155,7 +158,9 @@ pub async fn robust_query(
             let batch_ids: Vec<&str> = batch.iter().map(|n| n.id.as_str()).collect();
             eprintln!(
                 "[robust_query] iteration {}: querying {} nodes: {:?}",
-                tries, batch.len(), batch_ids
+                tries,
+                batch.len(),
+                batch_ids
             );
         }
 
@@ -195,12 +200,7 @@ pub async fn robust_query(
                 };
 
                 // Write request - 1s timeout (matches send())
-                match timeout(
-                    Duration::from_millis(1000),
-                    server_stream.write_all(&buf),
-                )
-                .await
-                {
+                match timeout(Duration::from_millis(1000), server_stream.write_all(&buf)).await {
                     Ok(Ok(())) => {} // write succeeded
                     Ok(Err(e)) => {
                         let _ = server_stream.shutdown().await;
@@ -252,7 +252,10 @@ pub async fn robust_query(
                 // Skip empty responses (matches send() behavior)
                 if response_data.is_empty() {
                     if verbose {
-                        eprintln!("[robust_query] node {} returned empty response, skipping", node_id);
+                        eprintln!(
+                            "[robust_query] node {} returned empty response, skipping",
+                            node_id
+                        );
                     }
                     continue;
                 }
@@ -275,7 +278,6 @@ pub async fn robust_query(
                 }
             }
         }
-
     }
 
     // No consensus reached -- return best-effort
@@ -294,7 +296,10 @@ pub async fn robust_query(
         }
         None => {
             if verbose {
-                eprintln!("[robust_query] no responses from any validator after {} tries", tries);
+                eprintln!(
+                    "[robust_query] no responses from any validator after {} tries",
+                    tries
+                );
             }
             Err("No responses from any validator".into())
         }
