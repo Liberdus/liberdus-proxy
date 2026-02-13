@@ -39,6 +39,8 @@ pub struct Config {
     pub local_source: LocalSource,
 
     pub notifier: NotifierConfig,
+
+    pub robust_query: RobustQueryConfig,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
