@@ -433,6 +433,42 @@ impl Liberdus {
         }
     }
 
+    /// Picks up to `n` distinct consensors, excluding any whose ID is in `exclude`.
+    /// Uses the same selection strategy as get_next_appropriate_consensor
+    /// (round-robin initially, then biased random after prepare_list).
+    /// If fewer than `n` unique nodes are available, returns as many as possible.
+    pub async fn get_n_distinct_consensors(
+        &self,
+        n: usize,
+        exclude: &std::collections::HashSet<String>,
+    ) -> Vec<Consensor> {
+        let mut result = Vec::with_capacity(n);
+        let mut seen = exclude.clone();
+        let mut attempts = 0;
+        let max_attempts = n * 3; // safety cap to avoid infinite loop
+
+        // Safety break if we can't find nodes
+        if self.active_nodelist.load().is_empty() {
+            return result;
+        }
+
+        while result.len() < n && attempts < max_attempts {
+            attempts += 1;
+            match self.get_next_appropriate_consensor_with_retry(3).await {
+                Some((_, node)) => {
+                    if seen.contains(&node.id) {
+                        continue;
+                    }
+                    seen.insert(node.id.clone());
+                    result.push(node);
+                }
+                None => break,
+            }
+        }
+        result
+    }
+    
+
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128) {
         // list already prepared on the first round robin,  no need to keep recording rtt for nodes
         if self
