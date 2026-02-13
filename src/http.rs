@@ -128,7 +128,14 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let (_method, route) = get_route(&req_buf).unwrap();
+                let (_method, route) = match get_route(&req_buf) {
+                    Some(r) => r,
+                    None => {
+                        eprintln!("Failed to parse HTTP method/route from request");
+                        respond_with_bad_request(&mut client_stream).await?;
+                        continue;
+                    }
+                };
 
                 match get_application(route.as_str()) {
                     Application::Monitor => {
@@ -161,14 +168,25 @@ where
                         }
                     }
                     Application::Validator => {
-                        if let Err(e) = liberdus::handle_request(
-                            req_buf,
-                            &mut client_stream,
-                            liberdus.clone(),
-                            config.clone(),
-                        )
-                        .await
-                        {
+                        let handler_result = if _method == "GET" && config.robust_query.enabled {
+                            liberdus::handle_request_robust(
+                                req_buf,
+                                &mut client_stream,
+                                liberdus.clone(),
+                                config.clone(),
+                            )
+                            .await
+                        } else {
+                            liberdus::handle_request(
+                                req_buf,
+                                &mut client_stream,
+                                liberdus.clone(),
+                                config.clone(),
+                            )
+                            .await
+                        };
+
+                        if let Err(e) = handler_result {
                             eprintln!("Error handling validator request: {}", e);
                         }
                         continue;
@@ -268,6 +286,14 @@ where
 {
     let response =
         "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    client_stream.write_all(response.as_bytes()).await
+}
+
+pub async fn respond_with_bad_request<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where
+    S: AsyncWrite + Unpin + Send,
+{
+    let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     client_stream.write_all(response.as_bytes()).await
 }
 

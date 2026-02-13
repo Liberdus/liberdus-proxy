@@ -13,6 +13,7 @@ pub mod crypto;
 pub mod http;
 pub mod liberdus;
 pub mod notifier;
+pub mod robust_query;
 pub mod rpc;
 pub mod shardus_monitor;
 pub mod subscription;

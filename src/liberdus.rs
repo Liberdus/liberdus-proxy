@@ -12,7 +12,6 @@ use std::{
         Arc,
     },
     time::Duration,
-    u128,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::time::sleep;
@@ -209,7 +208,7 @@ impl Liberdus {
     /// For a node with:
     /// - `timetaken_ms = 100`
     /// - `max_timeout = 500`
-    /// The bias is calculated as:
+    ///   The bias is calculated as:
     /// ```math
     /// normalized_rtt = (100 - 0.01) / (500 - 0.01) ≈ 0.19996
     /// bias = 1.0 - 0.19996 ≈ 0.80004
@@ -297,7 +296,7 @@ impl Liberdus {
             guard.clone()
         };
 
-        let max_timeout = self.config.max_http_timeout_ms.try_into().unwrap_or(4000); // 3 seconds
+        let max_timeout = self.config.max_http_timeout_ms; // 3 seconds
         let mut sorted_nodes = nodes.as_ref().clone();
 
         sorted_nodes.sort_by(|a, b| {
@@ -431,6 +430,41 @@ impl Liberdus {
             retry += 1;
             sleep(Duration::from_millis(1)).await;
         }
+    }
+
+    /// Picks up to `n` distinct consensors, excluding any whose ID is in `exclude`.
+    /// Uses the same selection strategy as get_next_appropriate_consensor
+    /// (round-robin initially, then biased random after prepare_list).
+    /// If fewer than `n` unique nodes are available, returns as many as possible.
+    pub async fn get_n_distinct_consensors(
+        &self,
+        n: usize,
+        exclude: &std::collections::HashSet<String>,
+    ) -> Vec<Consensor> {
+        let mut result = Vec::with_capacity(n);
+        let mut seen = exclude.clone();
+        let mut attempts = 0;
+        let max_attempts = n * 3; // safety cap to avoid infinite loop
+
+        // Safety break if we can't find nodes
+        if self.active_nodelist.load().is_empty() {
+            return result;
+        }
+
+        while result.len() < n && attempts < max_attempts {
+            attempts += 1;
+            match self.get_next_appropriate_consensor_with_retry(3).await {
+                Some((_, node)) => {
+                    if seen.contains(&node.id) {
+                        continue;
+                    }
+                    seen.insert(node.id.clone());
+                    result.push(node);
+                }
+                None => break,
+            }
+        }
+        result
     }
 
     pub fn set_consensor_trip_ms(&self, node_id: String, trip_ms: u128) {
@@ -788,6 +822,12 @@ mod tests {
             notifier: config::NotifierConfig {
                 ip: String::new(),
                 port: 0,
+            },
+            robust_query: config::RobustQueryConfig {
+                enabled: true,
+                redundancy: 3,
+                max_retries: 5,
+                verbose_logs: false,
             },
         }
     }
@@ -1179,7 +1219,13 @@ mod tests {
             .await
             .expect_err("connection should fail");
         let err_text = format!("{}", err);
-        assert!(err_text.contains("Connection refused") || err_text.contains("Error connecting"));
+        assert!(
+            err_text.contains("Connection refused")
+                || err_text.contains("Error connecting")
+                || err_text.contains("Timeout connecting"),
+            "unexpected error: {}",
+            err_text
+        );
 
         let mut buf = vec![0u8; 128];
         let n = tokio::time::timeout(std::time::Duration::from_secs(1), peer.read(&mut buf))
@@ -1341,6 +1387,57 @@ where
     // Relay the collected response to the client
     if let Err(e) = client_stream.write_all(&response_data).await {
         eprintln!("Error relaying response to client: {}", e);
+        http::respond_with_internal_error(client_stream).await?;
+        return Err(Box::new(e));
+    }
+
+    Ok(())
+}
+
+/// Like handle_request, but queries multiple validators and returns
+/// the consensus response. Used for read-only GET routes.
+pub async fn handle_request_robust<S>(
+    request_buffer: Vec<u8>,
+    client_stream: &mut S,
+    liberdus: Arc<Liberdus>,
+    config: Arc<config::Config>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    S: AsyncWrite + AsyncRead + Unpin + Send,
+{
+    let result = match crate::robust_query::robust_query(&liberdus, request_buffer, &config).await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Robust query failed: {}", e);
+            let error_str = e.to_string();
+            if error_str.contains("Timeout")
+                || error_str.contains("timeout")
+                || error_str.contains("Connection refused")
+            {
+                http::respond_with_timeout(client_stream).await?;
+            } else {
+                http::respond_with_internal_error(client_stream).await?;
+            }
+            return Err(e);
+        }
+    };
+
+    if !result.is_robust && config.robust_query.verbose_logs {
+        eprintln!("Warning: returning non-robust result (best-effort)");
+    }
+
+    // Set the same headers as handle_request does
+    let mut response_data = result.response_data;
+    http::set_http_header(&mut response_data, "Connection", "keep-alive");
+    http::set_http_header(
+        &mut response_data,
+        "Keep-Alive",
+        format!("timeout={}", config.tcp_keepalive_time_sec).as_str(),
+    );
+    http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+
+    if let Err(e) = client_stream.write_all(&response_data).await {
+        eprintln!("Error relaying robust response to client: {}", e);
         http::respond_with_internal_error(client_stream).await?;
         return Err(Box::new(e));
     }
