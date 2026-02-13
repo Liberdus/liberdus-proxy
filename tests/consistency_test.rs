@@ -110,6 +110,12 @@ async fn test_nodelist_consistency_lockstep() {
             ip: String::new(),
             port: 0,
         },
+        robust_query: config::RobustQueryConfig {
+            enabled: false,
+            redundancy: 3,
+            max_retries: 5,
+            verbose_logs: false,
+        },
     });
     config.max_http_timeout_ms = 500;
     config.nodelist_refresh_interval_sec = 1;

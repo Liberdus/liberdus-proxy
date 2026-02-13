@@ -789,6 +789,12 @@ mod tests {
                 ip: String::new(),
                 port: 0,
             },
+            robust_query: config::RobustQueryConfig {
+                enabled: true,
+                redundancy: 3,
+                max_retries: 5,
+                verbose_logs: false,
+            },
         }
     }
 

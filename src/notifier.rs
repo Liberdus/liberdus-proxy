@@ -128,8 +128,8 @@ mod tests {
     use tokio::net::TcpListener;
 
     use crate::config::{
-        Config, LocalSource, NodeFilteringConfig, NotifierConfig, ShardusMonitorProxyConfig,
-        StandaloneNetworkConfig, TLSConfig,
+        Config, LocalSource, NodeFilteringConfig, NotifierConfig, RobustQueryConfig,
+        ShardusMonitorProxyConfig, StandaloneNetworkConfig, TLSConfig,
     };
 
     fn test_config(port: u16) -> Config {
@@ -171,6 +171,12 @@ mod tests {
             notifier: NotifierConfig {
                 ip: "127.0.0.1".into(),
                 port,
+            },
+            robust_query: RobustQueryConfig {
+                enabled: false,
+                redundancy: 3,
+                max_retries: 5,
+                verbose_logs: false,
             },
         }
     }
