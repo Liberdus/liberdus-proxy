@@ -95,6 +95,21 @@ pub struct NotifierConfig {
     pub port: u16,
 }
 
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct RobustQueryConfig {
+    /// Master switch. When false, all GET validator routes use the old single-forward path.
+    pub enabled: bool,
+    /// Number of matching responses required to consider the result trustworthy.
+    /// Clamped to min(redundancy, available_nodes) at runtime.
+    pub redundancy: usize,
+    /// Maximum number of retry iterations if no consensus is reached in the first batch.
+    /// Each iteration queries (redundancy - highest_tally_count) additional nodes.
+    pub max_retries: usize,
+    /// When true, logs detailed information about robust query results including
+    /// node IDs, tally counts, and whether consensus was reached.
+    pub verbose_logs: bool,
+}
+
 /// Load the configuration from the config json file
 /// path is src/config.json
 impl Config {
