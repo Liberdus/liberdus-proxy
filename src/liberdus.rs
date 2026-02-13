@@ -12,7 +12,6 @@ use std::{
         Arc,
     },
     time::Duration,
-    u128,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::time::sleep;
@@ -209,7 +208,7 @@ impl Liberdus {
     /// For a node with:
     /// - `timetaken_ms = 100`
     /// - `max_timeout = 500`
-    /// The bias is calculated as:
+    ///   The bias is calculated as:
     /// ```math
     /// normalized_rtt = (100 - 0.01) / (500 - 0.01) ≈ 0.19996
     /// bias = 1.0 - 0.19996 ≈ 0.80004
@@ -297,7 +296,7 @@ impl Liberdus {
             guard.clone()
         };
 
-        let max_timeout = self.config.max_http_timeout_ms.try_into().unwrap_or(4000); // 3 seconds
+        let max_timeout = self.config.max_http_timeout_ms; // 3 seconds
         let mut sorted_nodes = nodes.as_ref().clone();
 
         sorted_nodes.sort_by(|a, b| {
