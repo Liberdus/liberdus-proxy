@@ -168,14 +168,25 @@ where
                         }
                     }
                     Application::Validator => {
-                        if let Err(e) = liberdus::handle_request(
-                            req_buf,
-                            &mut client_stream,
-                            liberdus.clone(),
-                            config.clone(),
-                        )
-                        .await
-                        {
+                        let handler_result = if _method == "GET" && config.robust_query.enabled {
+                            liberdus::handle_request_robust(
+                                req_buf,
+                                &mut client_stream,
+                                liberdus.clone(),
+                                config.clone(),
+                            )
+                            .await
+                        } else {
+                            liberdus::handle_request(
+                                req_buf,
+                                &mut client_stream,
+                                liberdus.clone(),
+                                config.clone(),
+                            )
+                            .await
+                        };
+
+                        if let Err(e) = handler_result {
                             eprintln!("Error handling validator request: {}", e);
                         }
                         continue;
