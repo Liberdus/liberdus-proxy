@@ -271,6 +271,14 @@ where
     client_stream.write_all(response.as_bytes()).await
 }
 
+pub async fn respond_with_bad_request<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where
+    S: AsyncWrite + Unpin + Send,
+{
+    let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    client_stream.write_all(response.as_bytes()).await
+}
+
 pub async fn respond_with_notfound<S>(client_stream: &mut S) -> Result<(), std::io::Error>
 where
     S: AsyncWrite + Unpin + Send,
