@@ -128,7 +128,14 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let (_method, route) = get_route(&req_buf).unwrap();
+                let (_method, route) = match get_route(&req_buf) {
+                    Some(r) => r,
+                    None => {
+                        eprintln!("Failed to parse HTTP method/route from request");
+                        respond_with_bad_request(&mut client_stream).await?;
+                        continue;
+                    }
+                };
 
                 match get_application(route.as_str()) {
                     Application::Monitor => {
