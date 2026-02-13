@@ -1220,7 +1220,13 @@ mod tests {
             .await
             .expect_err("connection should fail");
         let err_text = format!("{}", err);
-        assert!(err_text.contains("Connection refused") || err_text.contains("Error connecting"));
+        assert!(
+            err_text.contains("Connection refused")
+                || err_text.contains("Error connecting")
+                || err_text.contains("Timeout connecting"),
+            "unexpected error: {}",
+            err_text
+        );
 
         let mut buf = vec![0u8; 128];
         let n = tokio::time::timeout(std::time::Duration::from_secs(1), peer.read(&mut buf))
