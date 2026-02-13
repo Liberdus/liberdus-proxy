@@ -1390,6 +1390,60 @@ where
     Ok(())
 }
 
+/// Like handle_request, but queries multiple validators and returns
+/// the consensus response. Used for read-only GET routes.
+pub async fn handle_request_robust<S>(
+    request_buffer: Vec<u8>,
+    client_stream: &mut S,
+    liberdus: Arc<Liberdus>,
+    config: Arc<config::Config>,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    S: AsyncWrite + AsyncRead + Unpin + Send,
+{
+    let result = match crate::robust_query::robust_query(
+        &liberdus,
+        request_buffer,
+        &config,
+    ).await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Robust query failed: {}", e);
+            let error_str = e.to_string();
+            if error_str.contains("Timeout") || error_str.contains("timeout")
+                || error_str.contains("Connection refused")
+            {
+                http::respond_with_timeout(client_stream).await?;
+            } else {
+                http::respond_with_internal_error(client_stream).await?;
+            }
+            return Err(e);
+        }
+    };
+
+    if !result.is_robust && config.robust_query.verbose_logs {
+        eprintln!("Warning: returning non-robust result (best-effort)");
+    }
+
+    // Set the same headers as handle_request does
+    let mut response_data = result.response_data;
+    http::set_http_header(&mut response_data, "Connection", "keep-alive");
+    http::set_http_header(
+        &mut response_data,
+        "Keep-Alive",
+        format!("timeout={}", config.tcp_keepalive_time_sec).as_str(),
+    );
+    http::set_http_header(&mut response_data, "Access-Control-Allow-Origin", "*");
+
+    if let Err(e) = client_stream.write_all(&response_data).await {
+        eprintln!("Error relaying robust response to client: {}", e);
+        http::respond_with_internal_error(client_stream).await?;
+        return Err(Box::new(e));
+    }
+
+    Ok(())
+}
+
 /// Returns `(true, <tx_hash>)` when `route` is exactly
 /// `/old_receipt/<64-char hex>` with no extra path segments.
 /// Otherwise returns `(false, String::new())`.
