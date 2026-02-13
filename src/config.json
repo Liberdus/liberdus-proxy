@@ -36,5 +36,11 @@
     "notifier": {
         "ip": "127.0.0.1",
         "port": 4701
+    },
+    "robust_query": {
+        "enabled": true,
+        "redundancy": 3,
+        "max_retries": 5,
+        "verbose_logs": true
     }
 }
