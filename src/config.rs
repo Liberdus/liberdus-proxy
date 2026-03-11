@@ -39,6 +39,11 @@ pub struct Config {
     pub local_source: LocalSource,
 
     pub notifier: NotifierConfig,
+
+    /// Base URL of the bridge coordinator (e.g. http://127.0.0.1:8000). Used to forward
+    /// POST /notify-bridgeout from the bridge UI so the coordinator can poll for BridgeOut events.
+    #[serde(default)]
+    pub coordinator_url: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
