@@ -15,7 +15,7 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use crate::{collector, config, liberdus, notifier, shardus_monitor, subscription, Stats};
+use crate::{collector, config, coordinator_gateway, liberdus, notifier, shardus_monitor, subscription, Stats};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -28,10 +28,14 @@ enum Application {
     Notifier,
     Monitor,
     Debug,
+    /// Bridge UI notify-bridgeout → proxy → coordinator
+    CoordinatorGateway,
 }
 
-fn get_application(route: &str) -> Application {
-    if shardus_monitor::proxy::is_monitor_route(route) {
+fn get_application(method: &str, route: &str) -> Application {
+    if coordinator_gateway::is_notify_bridgeout_route(method, route) {
+        Application::CoordinatorGateway
+    } else if shardus_monitor::proxy::is_monitor_route(route) {
         Application::Monitor
     } else if collector::is_collector_route(route) {
         Application::Collector
@@ -128,9 +132,17 @@ where
         .await
         {
             Ok(Ok(())) => {
-                let (_method, route) = get_route(&req_buf).unwrap();
+                let (method, route) = get_route(&req_buf).unwrap();
 
-                match get_application(route.as_str()) {
+                match get_application(&method, &route) {
+                    Application::CoordinatorGateway => {
+                        if let Err(e) =
+                            coordinator_gateway::handle_request(req_buf, &mut client_stream, config.clone()).await
+                        {
+                            eprintln!("Error handling notify-bridgeout: {}", e);
+                        }
+                        continue;
+                    }
                     Application::Monitor => {
                         if let Err(e) = shardus_monitor::proxy::handle_request(
                             req_buf,
