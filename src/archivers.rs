@@ -273,6 +273,7 @@ mod tests {
                 ip: String::new(),
                 port: 0,
             },
+            coordinator_url: None,
         }
     }
 

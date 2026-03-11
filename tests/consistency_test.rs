@@ -110,6 +110,7 @@ async fn test_nodelist_consistency_lockstep() {
             ip: String::new(),
             port: 0,
         },
+        coordinator_url: None,
     });
     config.max_http_timeout_ms = 500;
     config.nodelist_refresh_interval_sec = 1;
