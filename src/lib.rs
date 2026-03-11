@@ -9,6 +9,7 @@ pub struct Stats {
 pub mod archivers;
 pub mod collector;
 pub mod config;
+pub mod coordinator_gateway;
 pub mod crypto;
 pub mod http;
 pub mod liberdus;
