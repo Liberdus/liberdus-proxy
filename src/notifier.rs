@@ -172,6 +172,7 @@ mod tests {
                 ip: "127.0.0.1".into(),
                 port,
             },
+            coordinator_url: None,
         }
     }
 
