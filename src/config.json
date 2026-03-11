@@ -36,5 +36,6 @@
     "notifier": {
         "ip": "127.0.0.1",
         "port": 4701
-    }
+    },
+    "coordinator_url": "http://127.0.0.1:8000"
 }
