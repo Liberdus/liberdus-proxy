@@ -38,6 +38,7 @@ where
         ObserverEndpointValidation::AllowedNotifyBridgeout => {
             ObserverEndpoint::NotifyBridgeout
         }
+        ObserverEndpointValidation::AllowedPreflight => ObserverEndpoint::Preflight,
         ObserverEndpointValidation::AllowedTransactionGet(forward_route) => {
             ObserverEndpoint::TransactionGet(forward_route)
         }
@@ -66,24 +67,18 @@ where
         }
     };
 
-    let observer_urls: Vec<String> = config
-        .observer_urls
-        .iter()
-        .map(|u| u.trim().trim_end_matches('/').to_string())
-        .filter(|u| !u.is_empty())
-        .collect();
-    if observer_urls.is_empty() {
-        eprintln!("[notify-bridgeout] observer_urls not configured");
-        respond_503(client_stream, "observer_urls not configured").await?;
-        return Err("observer_urls not configured".into());
-    }
-
     match endpoint {
+        ObserverEndpoint::Preflight => {
+            respond_preflight(client_stream).await?;
+            Ok(())
+        }
         ObserverEndpoint::TransactionGet(route_to_forward) => {
+            let observer_urls = configured_observer_urls(config.as_ref());
             forward_transaction_get_to_observers(route_to_forward, client_stream, observer_urls)
                 .await
         }
         ObserverEndpoint::NotifyBridgeout => {
+            let observer_urls = configured_observer_urls(config.as_ref());
             handle_notify_bridgeout(request_buffer, client_stream, observer_urls).await
         }
     }
@@ -172,11 +167,13 @@ fn is_allowed_observer_resource(route: &str) -> bool {
 
 enum ObserverEndpoint {
     NotifyBridgeout,
+    Preflight,
     TransactionGet(String),
 }
 
 enum ObserverEndpointValidation {
     AllowedNotifyBridgeout,
+    AllowedPreflight,
     AllowedTransactionGet(String),
     BadRequest(String),
     MethodNotAllowed,
@@ -197,6 +194,9 @@ fn validate_observer_endpoint(method: &str, route: &str) -> ObserverEndpointVali
     match normalized_path {
         "/notify-bridgeout" if method.eq_ignore_ascii_case("POST") => {
             ObserverEndpointValidation::AllowedNotifyBridgeout
+        }
+        "/notify-bridgeout" if method.eq_ignore_ascii_case("OPTIONS") => {
+            ObserverEndpointValidation::AllowedPreflight
         }
         "/transaction" | "/transactions" if method.eq_ignore_ascii_case("GET") => {
             if let Err(msg) = validate_transaction_query(&normalized_route) {
@@ -535,6 +535,15 @@ fn escape_json(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn configured_observer_urls(config: &Config) -> Vec<String> {
+    config
+        .observer_urls
+        .iter()
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty())
+        .collect()
+}
+
 async fn respond_json<S>(
     client_stream: &mut S,
     status_code: u16,
@@ -554,7 +563,7 @@ where
     };
     let body_bytes = body.as_bytes();
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nConnection: close\r\n\r\n{}",
         status_line,
         body_bytes.len(),
         body
@@ -563,3 +572,11 @@ where
     client_stream.flush().await
 }
 
+async fn respond_preflight<S>(client_stream: &mut S) -> Result<(), std::io::Error>
+where
+    S: AsyncWrite + Unpin + Send,
+{
+    let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nAccess-Control-Max-Age: 86400\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    client_stream.write_all(response.as_bytes()).await?;
+    client_stream.flush().await
+}
