@@ -58,6 +58,10 @@ fn post_request_with_body(body: &str) -> Vec<u8> {
     buf
 }
 
+fn options_request() -> Vec<u8> {
+    b"OPTIONS /observer/notify-bridgeout HTTP/1.1\r\nHost: localhost\r\nOrigin: http://localhost:8080\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type\r\n\r\n".to_vec()
+}
+
 async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>) -> Vec<u8> {
     let (mut client, mut peer) = tokio::io::duplex(1024);
     let config_clone = Arc::clone(&config);
@@ -71,12 +75,12 @@ async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>
 }
 
 #[test]
-fn test_is_notify_bridgeout_route() {
-    assert!(observer_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout"));
-    assert!(observer_gateway::is_notify_bridgeout_route("post", "/notify-bridgeout"));
-    assert!(observer_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout?x=1"));
-    assert!(!observer_gateway::is_notify_bridgeout_route("GET", "/notify-bridgeout"));
-    assert!(!observer_gateway::is_notify_bridgeout_route("POST", "/other"));
+fn test_is_observer_route() {
+    assert!(observer_gateway::is_observer_route("/observer/notify-bridgeout"));
+    assert!(observer_gateway::is_observer_route("/observer/notify-bridgeout?x=1"));
+    assert!(observer_gateway::is_observer_route("/observer/transactions"));
+    assert!(!observer_gateway::is_observer_route("/notify-bridgeout"));
+    assert!(!observer_gateway::is_observer_route("/other"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -100,4 +104,16 @@ async fn test_handle_request_valid_and_errors() {
     let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_no_url).await;
     let text = String::from_utf8_lossy(&res);
     assert!(text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"), "{}", text);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_handle_request_options_preflight() {
+    let config_ok = Arc::new(test_config(vec!["http://127.0.0.1:0".into()]));
+
+    let res = run_handle_request(options_request(), config_ok).await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(text.starts_with("HTTP/1.1 204 No Content"), "{}", text);
+    assert!(text.contains("Access-Control-Allow-Origin: *"), "{}", text);
+    assert!(text.contains("Access-Control-Allow-Methods: POST, GET, OPTIONS"), "{}", text);
+    assert!(text.contains("Access-Control-Allow-Headers: Content-Type, Authorization"), "{}", text);
 }
