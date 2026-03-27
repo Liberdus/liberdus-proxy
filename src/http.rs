@@ -15,7 +15,9 @@
 //! - `read_or_collect`: Reads and collects request or response data with header parsing.
 //! - `respond_with_internal_error`: Sends a 500 Internal Server Error response to the client.
 //! - `respond_with_timeout`: Sends a 504 Gateway Timeout response to the client.
-use crate::{collector, config, coordinator_gateway, liberdus, notifier, shardus_monitor, subscription, Stats};
+use crate::{
+    collector, config, liberdus, notifier, observer_gateway, shardus_monitor, subscription, Stats,
+};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -28,13 +30,14 @@ enum Application {
     Notifier,
     Monitor,
     Debug,
-    /// Bridge UI notify-bridgeout → proxy → coordinator
-    CoordinatorGateway,
+    /// Bridge UI notify-bridgeout → proxy → observers
+    ObserverGateway,
 }
 
 fn get_application(method: &str, route: &str) -> Application {
-    if coordinator_gateway::is_notify_bridgeout_route(method, route) {
-        Application::CoordinatorGateway
+    let _ = method;
+    if observer_gateway::is_observer_route(route) {
+        Application::ObserverGateway
     } else if shardus_monitor::proxy::is_monitor_route(route) {
         Application::Monitor
     } else if collector::is_collector_route(route) {
@@ -135,9 +138,13 @@ where
                 let (method, route) = get_route(&req_buf).unwrap();
 
                 match get_application(&method, &route) {
-                    Application::CoordinatorGateway => {
-                        if let Err(e) =
-                            coordinator_gateway::handle_request(req_buf, &mut client_stream, config.clone()).await
+                    Application::ObserverGateway => {
+                        if let Err(e) = observer_gateway::handle_request(
+                            req_buf,
+                            &mut client_stream,
+                            config.clone(),
+                        )
+                        .await
                         {
                             eprintln!("Error handling notify-bridgeout: {}", e);
                         }
