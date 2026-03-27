@@ -46,7 +46,7 @@ fn test_config(port: u16) -> Arc<config::Config> {
             ip: String::new(),
             port: 0,
         },
-        coordinator_url: None,
+        observer_urls: vec![],
     })
 }
 
