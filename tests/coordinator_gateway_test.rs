@@ -3,9 +3,9 @@ use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 
 use liberdus_proxy::config;
-use liberdus_proxy::coordinator_gateway;
+use liberdus_proxy::observer_gateway;
 
-fn test_config(coordinator_url: Option<String>) -> config::Config {
+fn test_config(observer_urls: Vec<String>) -> config::Config {
     config::Config {
         http_port: 0,
         crypto_seed: String::new(),
@@ -45,7 +45,7 @@ fn test_config(coordinator_url: Option<String>) -> config::Config {
             ip: String::new(),
             port: 0,
         },
-        coordinator_url,
+        observer_urls,
     }
 }
 
@@ -62,7 +62,7 @@ async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>
     let (mut client, mut peer) = tokio::io::duplex(1024);
     let config_clone = Arc::clone(&config);
     let handle = tokio::spawn(async move {
-        let _ = coordinator_gateway::handle_request(request_buffer, &mut client, config_clone).await;
+        let _ = observer_gateway::handle_request(request_buffer, &mut client, config_clone).await;
     });
     let mut output = vec![0u8; 512];
     let n = peer.read(&mut output).await.unwrap();
@@ -72,17 +72,17 @@ async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>
 
 #[test]
 fn test_is_notify_bridgeout_route() {
-    assert!(coordinator_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout"));
-    assert!(coordinator_gateway::is_notify_bridgeout_route("post", "/notify-bridgeout"));
-    assert!(coordinator_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout?x=1"));
-    assert!(!coordinator_gateway::is_notify_bridgeout_route("GET", "/notify-bridgeout"));
-    assert!(!coordinator_gateway::is_notify_bridgeout_route("POST", "/other"));
+    assert!(observer_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout"));
+    assert!(observer_gateway::is_notify_bridgeout_route("post", "/notify-bridgeout"));
+    assert!(observer_gateway::is_notify_bridgeout_route("POST", "/notify-bridgeout?x=1"));
+    assert!(!observer_gateway::is_notify_bridgeout_route("GET", "/notify-bridgeout"));
+    assert!(!observer_gateway::is_notify_bridgeout_route("POST", "/other"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_handle_request_valid_and_errors() {
-    let config_ok = Arc::new(test_config(Some("http://127.0.0.1:0".into())));
-    let config_no_url = Arc::new(test_config(None));
+    let config_ok = Arc::new(test_config(vec!["http://127.0.0.1:0".into()]));
+    let config_no_url = Arc::new(test_config(vec![]));
 
     // Valid body → 200 accepted
     let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_ok.clone()).await;
@@ -96,8 +96,8 @@ async fn test_handle_request_valid_and_errors() {
         assert!(text.starts_with("HTTP/1.1 400"), "body {:?} should get 400, got: {}", invalid_body, text);
     }
 
-    // No coordinator_url → 503
+    // No observer_urls → 503
     let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_no_url).await;
     let text = String::from_utf8_lossy(&res);
-    assert!(text.starts_with("HTTP/1.1 503") && text.contains("coordinator_url not configured"), "{}", text);
+    assert!(text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"), "{}", text);
 }
