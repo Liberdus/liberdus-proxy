@@ -40,10 +40,10 @@ pub struct Config {
 
     pub notifier: NotifierConfig,
 
-    /// Base URL of the bridge coordinator (e.g. http://127.0.0.1:8000). Used to forward
-    /// POST /notify-bridgeout from the bridge UI so the coordinator can poll for BridgeOut events.
+    /// Base URLs of TSS observers (e.g. http://127.0.0.1:8101). Used to forward
+    /// POST /notify-bridgeout from the bridge UI so observers can poll for BridgeOut events.
     #[serde(default)]
-    pub coordinator_url: Option<String>,
+    pub observer_urls: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
