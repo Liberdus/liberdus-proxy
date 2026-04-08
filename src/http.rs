@@ -895,7 +895,13 @@ mod tests {
 
         let (mut client_side, server_side) = tokio::io::duplex(1024);
 
-        let handler = handle_stream(server_side, liberdus, subscription_manager.clone(), config);
+        let handler = handle_stream(
+            server_side,
+            liberdus,
+            subscription_manager.clone(),
+            config,
+            "127.0.0.1:0".to_string(),
+        );
 
         let client = async {
             client_side

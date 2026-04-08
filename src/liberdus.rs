@@ -717,7 +717,6 @@ mod tests {
                 ip: "0.0.0.0".to_string(),
                 port: i,
                 rng_bias: None,
-                foundationNode: None,
             };
             nodes.push(node);
         }

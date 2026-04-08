@@ -401,8 +401,13 @@ mod tests {
         let subscription_manager_server = subscription_manager.clone();
 
         let server = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.unwrap();
-            handle_stream(stream, sock_map_server, subscription_manager_server)
+            let (stream, addr) = listener.accept().await.unwrap();
+            handle_stream(
+                stream,
+                sock_map_server,
+                subscription_manager_server,
+                addr.to_string(),
+            )
                 .await
                 .unwrap();
         });
@@ -435,8 +440,13 @@ mod tests {
         let subscription_manager_server = subscription_manager.clone();
 
         let server = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.unwrap();
-            handle_stream(stream, sock_map_server, subscription_manager_server)
+            let (stream, addr) = listener.accept().await.unwrap();
+            handle_stream(
+                stream,
+                sock_map_server,
+                subscription_manager_server,
+                addr.to_string(),
+            )
                 .await
                 .unwrap();
         });
