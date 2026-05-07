@@ -218,7 +218,7 @@ fn validate_transaction_query(route_with_query: &str) -> Result<(), String> {
     // - txId: 64 hex chars OR 0x + 64 hex chars
     // - sender: 0x + 40 hex chars
     // - type: integer in [0..=2]
-    // - status: integer in [0..=4]
+    // - status: integer in [0..=5]
     // - unprocessed: "true" | "false"
     let mut parts = route_with_query.splitn(2, '?');
     let _path = parts.next().unwrap_or(route_with_query);
@@ -262,7 +262,7 @@ fn validate_transaction_query(route_with_query: &str) -> Result<(), String> {
 
     if let Some(s) = params.get("status") {
         let v = s.parse::<i64>().map_err(|_| "Invalid status".to_string())?;
-        if !(0..=4).contains(&v) {
+        if !(0..=5).contains(&v) {
             return Err("Invalid status".to_string());
         }
     }
