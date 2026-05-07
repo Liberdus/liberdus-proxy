@@ -213,7 +213,7 @@ fn validate_observer_endpoint(method: &str, route: &str) -> ObserverEndpointVali
 }
 
 fn validate_transaction_query(route_with_query: &str) -> Result<(), String> {
-    // Mirrors coordinator GET /transaction validation (query-level):
+    // Mirrors observer GET /transaction validation (query-level):
     // - page: integer >= 1
     // - txId: 64 hex chars OR 0x + 64 hex chars
     // - sender: 0x + 40 hex chars
