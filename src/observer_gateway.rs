@@ -10,8 +10,12 @@
 
 use crate::config::Config;
 use crate::http;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+
+/// Rotates which configured observer is tried first for transaction GETs (failover order follows).
+static OBSERVER_RR_INDEX: AtomicUsize = AtomicUsize::new(0);
 
 /// Route observer traffic by prefix, similar to collector/notifier modules.
 pub fn is_observer_route(route: &str) -> bool {
@@ -542,6 +546,64 @@ fn configured_observer_urls(config: &Config) -> Vec<String> {
         .map(|u| u.trim().trim_end_matches('/').to_string())
         .filter(|u| !u.is_empty())
         .collect()
+}
+
+/// Puts the next observer first; remaining entries preserve failover order.
+fn observer_urls_round_robin(mut urls: Vec<String>) -> Vec<String> {
+    let n = urls.len();
+    if n <= 1 {
+        return urls;
+    }
+    let start = OBSERVER_RR_INDEX.fetch_add(1, Ordering::Relaxed) % n;
+    urls.rotate_left(start);
+    urls
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn observer_urls_round_robin_cycles_start_index() {
+        OBSERVER_RR_INDEX.store(0, Ordering::Relaxed);
+        let urls = vec![
+            "http://127.0.0.1:8101".to_string(),
+            "http://127.0.0.1:8102".to_string(),
+            "http://127.0.0.1:8103".to_string(),
+        ];
+        assert_eq!(
+            observer_urls_round_robin(urls.clone()),
+            vec![
+                "http://127.0.0.1:8101",
+                "http://127.0.0.1:8102",
+                "http://127.0.0.1:8103"
+            ]
+        );
+        assert_eq!(
+            observer_urls_round_robin(urls.clone()),
+            vec![
+                "http://127.0.0.1:8102",
+                "http://127.0.0.1:8103",
+                "http://127.0.0.1:8101"
+            ]
+        );
+        assert_eq!(
+            observer_urls_round_robin(urls.clone()),
+            vec![
+                "http://127.0.0.1:8103",
+                "http://127.0.0.1:8101",
+                "http://127.0.0.1:8102"
+            ]
+        );
+        assert_eq!(
+            observer_urls_round_robin(urls),
+            vec![
+                "http://127.0.0.1:8101",
+                "http://127.0.0.1:8102",
+                "http://127.0.0.1:8103"
+            ]
+        );
+    }
 }
 
 async fn respond_json<S>(
