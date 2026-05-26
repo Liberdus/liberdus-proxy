@@ -351,13 +351,19 @@ fn parse_content_length(headers: &[u8]) -> Option<usize> {
     None
 }
 
+/// CORS headers for browser bridge UIs (e.g. localhost:8080 → proxy on another port/host).
+pub const CORS_ALLOW_ALL: &str = "Access-Control-Allow-Origin: *\r\n\
+Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
+Access-Control-Allow-Headers: Content-Type, Authorization\r\n";
+
 /// Takes the stream, responds with a 500 Internal Server Error, and shutdown tcp
 pub async fn respond_with_internal_error<S>(client_stream: &mut S) -> Result<(), std::io::Error>
 where
     S: AsyncWrite + Unpin + Send,
 {
-    let response =
-        "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let response = format!(
+        "HTTP/1.1 500 Internal Server Error\r\n{CORS_ALLOW_ALL}Content-Length: 0\r\nConnection: close\r\n\r\n"
+    );
     client_stream.write_all(response.as_bytes()).await
 }
 
