@@ -407,7 +407,17 @@ pub async fn respond_with_timeout<S>(client_stream: &mut S) -> Result<(), std::i
 where
     S: AsyncWrite + Unpin + Send,
 {
-    let response = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let body = r#"{"Err":"Gateway timeout"}"#;
+    let response = format!(
+        "HTTP/1.1 504 Gateway Timeout\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         {CORS_ALLOW_ALL}\
+         Connection: close\r\n\r\n\
+         {}",
+        body.len(),
+        body
+    );
     client_stream.write_all(response.as_bytes()).await
 }
 
