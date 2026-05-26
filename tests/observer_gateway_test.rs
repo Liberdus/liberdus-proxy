@@ -50,7 +50,7 @@ fn test_config(observer_urls: Vec<String>) -> config::Config {
 }
 
 fn post_request_with_body(body: &str) -> Vec<u8> {
-    let mut buf = b"POST /notify-bridgeout HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: "
+    let mut buf = b"POST /observer/notify-bridgeout HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: "
         .to_vec();
     buf.extend_from_slice(body.len().to_string().as_bytes());
     buf.extend_from_slice(b"\r\n\r\n");
