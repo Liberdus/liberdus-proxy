@@ -389,7 +389,7 @@ where
         "HTTP/1.1 200 OK\r\n\
          Content-Type: application/json\r\n\
          Content-Length: {}\r\n\
-         Access-Control-Allow-Origin: *\r\n\
+         {CORS_ALLOW_ALL}\
          Connection: close\r\n\r\n",
         body.len()
     );
