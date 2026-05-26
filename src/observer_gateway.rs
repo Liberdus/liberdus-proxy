@@ -96,6 +96,11 @@ async fn handle_notify_bridgeout<S>(
 where
     S: AsyncWrite + AsyncRead + Unpin + Send,
 {
+    if observer_urls.is_empty() {
+        respond_503(client_stream, "observer_urls not configured").await?;
+        return Ok(());
+    }
+
     let body = http::extract_body(&request_buffer);
 
     // Validate request: Bridge UI sends JSON.stringify({ chainId }) — body must be {"chainId": number}
@@ -389,6 +394,12 @@ async fn forward_transaction_get_to_observers<S>(
 where
     S: AsyncWrite + Unpin + Send,
 {
+    if observer_urls.is_empty() {
+        respond_503(client_stream, "observer_urls not configured").await?;
+        return Ok(());
+    }
+
+    let observer_urls = observer_urls_round_robin(observer_urls);
     let route = normalize_transaction_route_params(&route);
     let since_filter = parse_since_tx_timestamp(&route);
     let client = reqwest::Client::new();
