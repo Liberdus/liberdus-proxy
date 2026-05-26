@@ -371,7 +371,9 @@ pub async fn respond_with_notfound<S>(client_stream: &mut S) -> Result<(), std::
 where
     S: AsyncWrite + Unpin + Send,
 {
-    let response = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let response = format!(
+        "HTTP/1.1 404 Not Found\r\n{CORS_ALLOW_ALL}Content-Length: 0\r\nConnection: close\r\n\r\n"
+    );
     client_stream.write_all(response.as_bytes()).await
 }
 
