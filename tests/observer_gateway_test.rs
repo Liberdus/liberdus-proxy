@@ -62,6 +62,24 @@ fn options_request() -> Vec<u8> {
     b"OPTIONS /observer/notify-bridgeout HTTP/1.1\r\nHost: localhost\r\nOrigin: http://localhost:8080\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type\r\n\r\n".to_vec()
 }
 
+fn get_transaction_request() -> Vec<u8> {
+    b"GET /observer/transaction?page=1 HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec()
+}
+
+fn assert_cors_allow_all(text: &str) {
+    assert!(text.contains("Access-Control-Allow-Origin: *"), "{}", text);
+    assert!(
+        text.contains("Access-Control-Allow-Methods: GET, POST, OPTIONS"),
+        "{}",
+        text
+    );
+    assert!(
+        text.contains("Access-Control-Allow-Headers: Content-Type, Authorization"),
+        "{}",
+        text
+    );
+}
+
 async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>) -> Vec<u8> {
     let (mut client, mut peer) = tokio::io::duplex(1024);
     let config_clone = Arc::clone(&config);
@@ -92,18 +110,71 @@ async fn test_handle_request_valid_and_errors() {
     let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_ok.clone()).await;
     let text = String::from_utf8_lossy(&res);
     assert!(text.starts_with("HTTP/1.1 200 OK") && text.contains(r#"{"Ok":"accepted"}"#), "{}", text);
+    assert_cors_allow_all(&text);
 
     // Invalid bodies → 400
     for invalid_body in ["", "not json", r#"{"other":123}"#, r#"{"chainId":"80002"}"#] {
         let res = run_handle_request(post_request_with_body(invalid_body), config_ok.clone()).await;
         let text = String::from_utf8_lossy(&res);
         assert!(text.starts_with("HTTP/1.1 400"), "body {:?} should get 400, got: {}", invalid_body, text);
+        assert_cors_allow_all(&text);
     }
 
-    // No observer_urls → 503
-    let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_no_url).await;
+    // No observer_urls → 503 (POST notify-bridgeout)
+    let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_no_url.clone()).await;
     let text = String::from_utf8_lossy(&res);
     assert!(text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"), "{}", text);
+    assert_cors_allow_all(&text);
+
+    // No observer_urls → 503 (GET /transaction)
+    let res = run_handle_request(get_transaction_request(), config_no_url).await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(
+        text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"),
+        "{}",
+        text
+    );
+    assert_cors_allow_all(&text);
+
+    // 404 unsupported observer route
+    let res = run_handle_request(
+        b"GET /observer/unknown HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        config_ok.clone(),
+    )
+    .await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(text.starts_with("HTTP/1.1 404"), "{}", text);
+    assert_cors_allow_all(&text);
+
+    // 405 wrong method
+    let res = run_handle_request(
+        b"GET /observer/notify-bridgeout HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        config_ok.clone(),
+    )
+    .await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(text.starts_with("HTTP/1.1 405"), "{}", text);
+    assert_cors_allow_all(&text);
+
+    // 400 invalid transaction query
+    let res = run_handle_request(
+        b"GET /observer/transaction?page=0 HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        config_ok.clone(),
+    )
+    .await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(text.starts_with("HTTP/1.1 400"), "{}", text);
+    assert_cors_allow_all(&text);
+
+    // 400 unparseable request line
+    let res = run_handle_request(
+        b"TRACE /observer/notify-bridgeout HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec(),
+        config_ok,
+    )
+    .await;
+    let text = String::from_utf8_lossy(&res);
+    assert!(text.starts_with("HTTP/1.1 400"), "{}", text);
+    assert_cors_allow_all(&text);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -113,7 +184,5 @@ async fn test_handle_request_options_preflight() {
     let res = run_handle_request(options_request(), config_ok).await;
     let text = String::from_utf8_lossy(&res);
     assert!(text.starts_with("HTTP/1.1 204 No Content"), "{}", text);
-    assert!(text.contains("Access-Control-Allow-Origin: *"), "{}", text);
-    assert!(text.contains("Access-Control-Allow-Methods: POST, GET, OPTIONS"), "{}", text);
-    assert!(text.contains("Access-Control-Allow-Headers: Content-Type, Authorization"), "{}", text);
+    assert_cors_allow_all(&text);
 }

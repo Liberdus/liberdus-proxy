@@ -559,15 +559,24 @@ fn configured_observer_urls(config: &Config) -> Vec<String> {
         .collect()
 }
 
-/// Puts the next observer first; remaining entries preserve failover order.
-fn observer_urls_round_robin(mut urls: Vec<String>) -> Vec<String> {
+/// Rotates `urls` so index `start % n` is first; remaining entries preserve failover order.
+fn observer_urls_round_robin_at_start(mut urls: Vec<String>, start: usize) -> Vec<String> {
     let n = urls.len();
     if n <= 1 {
         return urls;
     }
-    let start = OBSERVER_RR_INDEX.fetch_add(1, Ordering::Relaxed) % n;
-    urls.rotate_left(start);
+    urls.rotate_left(start % n);
     urls
+}
+
+/// Puts the next observer first; remaining entries preserve failover order.
+fn observer_urls_round_robin(urls: Vec<String>) -> Vec<String> {
+    let n = urls.len();
+    if n <= 1 {
+        return urls;
+    }
+    let start = OBSERVER_RR_INDEX.fetch_add(1, Ordering::Relaxed);
+    observer_urls_round_robin_at_start(urls, start)
 }
 
 #[cfg(test)]
@@ -576,14 +585,13 @@ mod tests {
 
     #[test]
     fn observer_urls_round_robin_cycles_start_index() {
-        OBSERVER_RR_INDEX.store(0, Ordering::Relaxed);
         let urls = vec![
             "http://127.0.0.1:8101".to_string(),
             "http://127.0.0.1:8102".to_string(),
             "http://127.0.0.1:8103".to_string(),
         ];
         assert_eq!(
-            observer_urls_round_robin(urls.clone()),
+            observer_urls_round_robin_at_start(urls.clone(), 0),
             vec![
                 "http://127.0.0.1:8101",
                 "http://127.0.0.1:8102",
@@ -591,7 +599,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            observer_urls_round_robin(urls.clone()),
+            observer_urls_round_robin_at_start(urls.clone(), 1),
             vec![
                 "http://127.0.0.1:8102",
                 "http://127.0.0.1:8103",
@@ -599,7 +607,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            observer_urls_round_robin(urls.clone()),
+            observer_urls_round_robin_at_start(urls.clone(), 2),
             vec![
                 "http://127.0.0.1:8103",
                 "http://127.0.0.1:8101",
@@ -607,7 +615,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            observer_urls_round_robin(urls),
+            observer_urls_round_robin_at_start(urls, 3),
             vec![
                 "http://127.0.0.1:8101",
                 "http://127.0.0.1:8102",
@@ -636,9 +644,10 @@ where
     };
     let body_bytes = body.as_bytes();
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n{}",
         status_line,
         body_bytes.len(),
+        http::CORS_ALLOW_ALL,
         body
     );
     client_stream.write_all(response.as_bytes()).await?;
@@ -649,7 +658,10 @@ async fn respond_preflight<S>(client_stream: &mut S) -> Result<(), std::io::Erro
 where
     S: AsyncWrite + Unpin + Send,
 {
-    let response = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization\r\nAccess-Control-Max-Age: 86400\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let response = format!(
+        "HTTP/1.1 204 No Content\r\n{}Access-Control-Max-Age: 86400\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        http::CORS_ALLOW_ALL
+    );
     client_stream.write_all(response.as_bytes()).await?;
     client_stream.flush().await
 }
