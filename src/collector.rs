@@ -382,7 +382,7 @@ where
                     return Err(Box::new(e));
                 }
             }
-        },
+        }
         Ok(Err(e)) => {
             eprintln!("Error forwarding request to collector api server: {}", e);
             http::respond_with_internal_error(client_stream).await?;

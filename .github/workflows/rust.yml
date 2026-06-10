@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -34,11 +37,28 @@ jobs:
     - name: Redirect
       run: echo '<!DOCTYPE HTML><html lang="en-US"><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0; url=https://liberdus.com/liberdus-proxy/liberdus_proxy"><script type="text/javascript">window.location.href = "https://liberdus.com/liberdus-proxy/liberdus_proxy"</script><title>Page Redirection</title></head><body>If you are not redirected automatically, follow this <a href="https://liberdus.com/liberdus-proxy/liberdus_proxy">link to example</a>.</body></html>' > ./target/doc/index.html
 
+    - name: Upload docs
+      uses: actions/upload-artifact@v4
+      with:
+        name: docs
+        path: target/doc/
+
+  deploy-docs:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download docs
+      uses: actions/download-artifact@v4
+      with:
+        name: docs
+        path: target/doc/
 
     - name: Deploy to gh-pages
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./target/doc/
-

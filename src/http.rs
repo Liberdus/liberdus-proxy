@@ -31,7 +31,7 @@ fn get_timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     // Format as human-readable timestamp (you can adjust format as needed)
     format!("{}", now)
 }
@@ -142,8 +142,12 @@ pub async fn handle_stream<StreamLike>(
 where
     StreamLike: AsyncWrite + AsyncRead + Unpin + Send,
 {
-    println!("[{}] [HTTP_CONNECT] IP: {} | New connection established", get_timestamp(), client_addr);
-    
+    println!(
+        "[{}] [HTTP_CONNECT] IP: {} | New connection established",
+        get_timestamp(),
+        client_addr
+    );
+
     loop {
         let mut req_buf = Vec::new();
         match timeout(
@@ -158,35 +162,58 @@ where
                     // Client closed connection cleanly
                     break;
                 }
-                
+
                 // Log that we received data
-                println!("[{}] [HTTP_DATA] IP: {} | Received {} bytes", get_timestamp(), client_addr, req_buf.len());
-                
+                println!(
+                    "[{}] [HTTP_DATA] IP: {} | Received {} bytes",
+                    get_timestamp(),
+                    client_addr,
+                    req_buf.len()
+                );
+
                 // Log warning for unusually large requests
                 if req_buf.len() > 100_000 {
-                    eprintln!("[{}] [HTTP_WARNING] IP: {} | Large request received: {} bytes", get_timestamp(), client_addr, req_buf.len());
+                    eprintln!(
+                        "[{}] [HTTP_WARNING] IP: {} | Large request received: {} bytes",
+                        get_timestamp(),
+                        client_addr,
+                        req_buf.len()
+                    );
                 }
-                
+
                 let method_route = match get_route(&req_buf) {
                     Some(route_info) => route_info,
                     None => {
-                        eprintln!("[{}] [HTTP_ERROR] IP: {} | Failed to extract route from request", get_timestamp(), client_addr);
+                        eprintln!(
+                            "[{}] [HTTP_ERROR] IP: {} | Failed to extract route from request",
+                            get_timestamp(),
+                            client_addr
+                        );
                         // Log the first 200 bytes of the request for debugging
                         if let Ok(req_str) = std::str::from_utf8(&req_buf) {
-                            let preview = if req_str.len() > 200 { &req_str[..200] } else { req_str };
-                            eprintln!("[{}] [HTTP_DEBUG] IP: {} | Request preview: {:?}", get_timestamp(), client_addr, preview);
+                            let preview = if req_str.len() > 200 {
+                                &req_str[..200]
+                            } else {
+                                req_str
+                            };
+                            eprintln!(
+                                "[{}] [HTTP_DEBUG] IP: {} | Request preview: {:?}",
+                                get_timestamp(),
+                                client_addr,
+                                preview
+                            );
                         }
                         break;
                     }
                 };
-                
+
                 let (method, route) = method_route;
-                
+
                 // Extract client information for logging
                 let user_agent = extract_user_agent(&req_buf);
                 let client_ip = extract_client_ip(&req_buf, &client_addr);
                 let (platform, app_version, device_id) = extract_client_info(&req_buf);
-                
+
                 // Log successful request
                 println!(
                     "[{}] [REQUEST] IP: {} | Route: {} {} | UA: {} | Platform: {} | AppVer: {} | DeviceID: {}",
@@ -270,11 +297,13 @@ where
             }
             Ok(Err(e)) => {
                 let error_details = match e.kind() {
-                    std::io::ErrorKind::UnexpectedEof => "Unexpected EOF - client disconnected abruptly",
+                    std::io::ErrorKind::UnexpectedEof => {
+                        "Unexpected EOF - client disconnected abruptly"
+                    }
                     std::io::ErrorKind::ConnectionReset => "Connection reset by peer",
                     std::io::ErrorKind::ConnectionAborted => "Connection aborted",
                     std::io::ErrorKind::TimedOut => "Read operation timed out",
-                    _ => "Unknown IO error"
+                    _ => "Unknown IO error",
                 };
                 eprintln!(
                     "[{}] [STREAM_ERROR] IP: {} | Error attempting to read bytes out of client stream: {} (Kind: {:?}, Details: {})",
@@ -292,8 +321,12 @@ where
         }
     }
 
-    println!("[{}] [HTTP_DISCONNECT] IP: {} | Connection closed", get_timestamp(), client_addr);
-    
+    println!(
+        "[{}] [HTTP_DISCONNECT] IP: {} | Connection closed",
+        get_timestamp(),
+        client_addr
+    );
+
     match client_stream.shutdown().await {
         Ok(_) => Ok(()),
         Err(_e) => Ok(()),
@@ -487,7 +520,7 @@ pub fn extract_client_info(buffer: &[u8]) -> (String, String, String) {
     let mut platform = "Unknown".to_string();
     let mut app_version = "Unknown".to_string();
     let mut device_id = "Unknown".to_string();
-    
+
     if let Ok(buffer_str) = std::str::from_utf8(buffer) {
         for line in buffer_str.lines() {
             let line_lower = line.to_lowercase();
@@ -500,7 +533,7 @@ pub fn extract_client_info(buffer: &[u8]) -> (String, String, String) {
             }
         }
     }
-    
+
     (platform, app_version, device_id)
 }
 pub async fn listen(
@@ -558,8 +591,14 @@ pub async fn listen(
                     Ok(tls_stream) => {
                         let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
                         let client_addr = format!("{}", socket_addr);
-                        let e =
-                            handle_stream(tls_stream, liberdus, subscription_manager, config, client_addr).await;
+                        let e = handle_stream(
+                            tls_stream,
+                            liberdus,
+                            subscription_manager,
+                            config,
+                            client_addr,
+                        )
+                        .await;
                         if let Err(e) = e {
                             eprintln!("Handle Stream Error: {}", e);
                         }
@@ -574,7 +613,14 @@ pub async fn listen(
                 },
                 None => {
                     let client_addr = format!("{}", socket_addr);
-                    let e = handle_stream(raw_stream, liberdus, subscription_manager, config, client_addr).await;
+                    let e = handle_stream(
+                        raw_stream,
+                        liberdus,
+                        subscription_manager,
+                        config,
+                        client_addr,
+                    )
+                    .await;
                     if let Err(e) = e {
                         eprintln!("Handle Stream Error: {}", e);
                     }

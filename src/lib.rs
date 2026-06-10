@@ -9,11 +9,11 @@ pub struct Stats {
 pub mod archivers;
 pub mod collector;
 pub mod config;
-pub mod observer_gateway;
 pub mod crypto;
 pub mod http;
 pub mod liberdus;
 pub mod notifier;
+pub mod observer_gateway;
 pub mod rpc;
 pub mod shardus_monitor;
 pub mod subscription;

@@ -39,9 +39,7 @@ where
     };
 
     let endpoint = match validate_observer_endpoint(&method, &route) {
-        ObserverEndpointValidation::AllowedNotifyBridgeout => {
-            ObserverEndpoint::NotifyBridgeout
-        }
+        ObserverEndpointValidation::AllowedNotifyBridgeout => ObserverEndpoint::NotifyBridgeout,
         ObserverEndpointValidation::AllowedPreflight => ObserverEndpoint::Preflight,
         ObserverEndpointValidation::AllowedTransactionGet(forward_route) => {
             ObserverEndpoint::TransactionGet(forward_route)
@@ -106,7 +104,12 @@ where
     // Validate request: Bridge UI sends JSON.stringify({ chainId }) — body must be {"chainId": number}
     if body.is_empty() {
         eprintln!("[notify-bridgeout] rejected: empty body");
-        respond_json(client_stream, 400, r#"{"Err":"Invalid or missing chainId"}"#).await?;
+        respond_json(
+            client_stream,
+            400,
+            r#"{"Err":"Invalid or missing chainId"}"#,
+        )
+        .await?;
         return Ok(());
     }
     let chain_id_valid = serde_json::from_slice::<serde_json::Value>(&body)
@@ -118,7 +121,12 @@ where
         .is_some();
     if !chain_id_valid {
         eprintln!("[notify-bridgeout] rejected: invalid or missing chainId in body");
-        respond_json(client_stream, 400, r#"{"Err":"Invalid or missing chainId"}"#).await?;
+        respond_json(
+            client_stream,
+            400,
+            r#"{"Err":"Invalid or missing chainId"}"#,
+        )
+        .await?;
         return Ok(());
     }
 
@@ -157,7 +165,10 @@ where
                     }
                 }
                 Err(e) => {
-                    eprintln!("[notify-bridgeout] observer request failed: {} (url={})", e, url);
+                    eprintln!(
+                        "[notify-bridgeout] observer request failed: {} (url={})",
+                        e, url
+                    );
                 }
             }
         }
@@ -524,7 +535,10 @@ fn filter_transaction_response_by_timestamp(
 
     if let Some(ok) = v.get_mut("Ok").and_then(|ok| ok.as_object_mut()) {
         let len = filtered.len() as u64;
-        ok.insert("transactions".to_string(), serde_json::Value::Array(filtered));
+        ok.insert(
+            "transactions".to_string(),
+            serde_json::Value::Array(filtered),
+        );
         ok.insert(
             "totalTranactions".to_string(),
             serde_json::Value::Number(serde_json::Number::from(len)),

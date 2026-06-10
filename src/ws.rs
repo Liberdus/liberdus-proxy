@@ -16,7 +16,7 @@ fn get_timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    
+
     // Format as human-readable timestamp (you can adjust format as needed)
     format!("{}", now)
 }
@@ -30,6 +30,11 @@ pub enum Methods {
 pub type SocketId = String;
 pub type SocketIdents = Arc<RwLock<HashMap<SocketId, UnboundedSender<rpc::RpcResponse>>>>;
 pub type WebsocketIncoming = crate::rpc::RpcRequest<Methods>;
+
+/// Redact socket/session IDs before logging to avoid cleartext session identifiers.
+fn redact_socket_id_for_log(_socket_id: &str) -> &'static str {
+    "***"
+}
 
 fn generate_uuid() -> String {
     let mut random_bytes = [0u8; 16];
@@ -145,7 +150,9 @@ pub async fn listen(
                     Ok(tls_stream) => {
                         let tls_stream = tokio_rustls::TlsStream::Server(tls_stream);
                         let client_addr = format!("{}", socket_addr);
-                        let e = handle_stream(tls_stream, sock_map, subscription_manager, client_addr).await;
+                        let e =
+                            handle_stream(tls_stream, sock_map, subscription_manager, client_addr)
+                                .await;
                         if let Err(e) = e {
                             eprintln!("Handle Stream Error: {:?}", e);
                         }
@@ -160,7 +167,8 @@ pub async fn listen(
                 },
                 None => {
                     let client_addr = format!("{}", socket_addr);
-                    let e = handle_stream(raw_stream, sock_map, subscription_manager, client_addr).await;
+                    let e = handle_stream(raw_stream, sock_map, subscription_manager, client_addr)
+                        .await;
                     if let Err(e) = e {
                         eprintln!("Handle Stream Error: {}", e);
                     }
@@ -185,9 +193,14 @@ where
 {
     let socket_id = generate_uuid();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<rpc::RpcResponse>();
-    
-    println!("[{}] [WS_CONNECT] IP: {} | Socket ID: {}", get_timestamp(), client_addr, socket_id);
-    
+
+    println!(
+        "[{}] [WS_CONNECT] IP: {} | Socket ID: {}",
+        get_timestamp(),
+        client_addr,
+        redact_socket_id_for_log(&socket_id)
+    );
+
     let ws_stream = match tokio_tungstenite::accept_async(stream).await {
         Ok(ws_stream) => {
             {
@@ -228,7 +241,12 @@ where
             match msg {
                 Ok(msg) => match msg {
                     Message::Close(_) => {
-                        println!("[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Client closed connection", get_timestamp(), client_addr_1, socket_id_1);
+                        println!(
+                            "[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Client closed connection",
+                            get_timestamp(),
+                            client_addr_1,
+                            redact_socket_id_for_log(&socket_id_1)
+                        );
                         let mut guard = sock_map.write().await;
                         guard.remove(&socket_id_1);
                         subscription_manager_long_lived
@@ -241,7 +259,13 @@ where
                         let parsed: WebsocketIncoming = match serde_json::from_str(&msg) {
                             Ok(p) => p,
                             Err(e) => {
-                                eprintln!("[{}] [WS_ERROR] IP: {} | Socket ID: {} | Invalid JSON: {}", get_timestamp(), client_addr_1, socket_id_1, e);
+                                eprintln!(
+                                    "[{}] [WS_ERROR] IP: {} | Socket ID: {} | Invalid JSON: {}",
+                                    get_timestamp(),
+                                    client_addr_1,
+                                    redact_socket_id_for_log(&socket_id_1),
+                                    e
+                                );
                                 let resp = rpc::generate_error_response(
                                     None,
                                     format!("Invalid JSON: {}", e),
@@ -257,7 +281,7 @@ where
                             "[{}] [WS_MESSAGE] IP: {} | Socket ID: {} | Method: {:?} | ID: {:?}",
                             get_timestamp(),
                             client_addr_1,
-                            socket_id_1,
+                            redact_socket_id_for_log(&socket_id_1),
                             parsed.method,
                             rpc_id
                         );
@@ -269,8 +293,13 @@ where
                         )
                         .await;
                         if let Err(e) = e {
-                            eprintln!("[{}] [WS_RPC_ERROR] IP: {} | Socket ID: {} | Error handling request: {}", 
-                                     get_timestamp(), client_addr_1, socket_id_1, e);
+                            eprintln!(
+                                "[{}] [WS_RPC_ERROR] IP: {} | Socket ID: {} | Error handling request: {}",
+                                get_timestamp(),
+                                client_addr_1,
+                                redact_socket_id_for_log(&socket_id_1),
+                                e
+                            );
                             let resp = rpc::generate_error_response(
                                 Some(rpc_id),
                                 format!("Error handling request: {}", e),
@@ -280,7 +309,12 @@ where
                         }
                     }
                     Message::Pong(_) => {
-                        println!("[{}] [WS_PONG] IP: {} | Socket ID: {}", get_timestamp(), client_addr_1, socket_id_1);
+                        println!(
+                            "[{}] [WS_PONG] IP: {} | Socket ID: {}",
+                            get_timestamp(),
+                            client_addr_1,
+                            redact_socket_id_for_log(&socket_id_1)
+                        );
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
@@ -292,9 +326,20 @@ where
                     }
                 },
                 Err(e) => {
-                    eprintln!("[{}] [WS_ERROR] IP: {} | Socket ID: {} | WebSocket error: {}", get_timestamp(), client_addr_1, socket_id_1, e);
+                    eprintln!(
+                        "[{}] [WS_ERROR] IP: {} | Socket ID: {} | WebSocket error: {}",
+                        get_timestamp(),
+                        client_addr_1,
+                        redact_socket_id_for_log(&socket_id_1),
+                        e
+                    );
                     if e.to_string().contains("Connection reset by peer") {
-                        println!("[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Connection reset by peer", get_timestamp(), client_addr_1, socket_id_1);
+                        println!(
+                            "[{}] [WS_DISCONNECT] IP: {} | Socket ID: {} | Connection reset by peer",
+                            get_timestamp(),
+                            client_addr_1,
+                            redact_socket_id_for_log(&socket_id_1)
+                        );
                         break;
                     }
                 }
@@ -316,7 +361,12 @@ where
                 .as_secs()
                 .saturating_sub(last);
             if elapsed > heartbeat_interval_sec {
-                println!("[{}] [WS_TIMEOUT] Socket ID: {} | Closing due to heartbeat timeout ({}s elapsed)", get_timestamp(), socket_id, elapsed);
+                println!(
+                    "[{}] [WS_TIMEOUT] Socket ID: {} | Closing due to heartbeat timeout ({}s elapsed)",
+                    get_timestamp(),
+                    redact_socket_id_for_log(&socket_id),
+                    elapsed
+                );
                 subscription_manager.unsubscribe_all(&socket_id).await;
                 let mut guard = write_half_for_ping_pong.lock().await;
                 let _ = guard.close().await;
@@ -389,6 +439,14 @@ mod tests {
         assert!("89ab".contains(eighth));
     }
 
+    #[test]
+    fn redact_socket_id_for_log_masks_session_identifier() {
+        assert_eq!(
+            redact_socket_id_for_log("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+            "***"
+        );
+    }
+
     #[tokio::test]
     async fn handle_stream_processes_invalid_json_and_closes() {
         let liberdus = test_liberdus();
@@ -408,8 +466,8 @@ mod tests {
                 subscription_manager_server,
                 addr.to_string(),
             )
-                .await
-                .unwrap();
+            .await
+            .unwrap();
         });
 
         let url = format!("ws://{}", addr);
@@ -447,8 +505,8 @@ mod tests {
                 subscription_manager_server,
                 addr.to_string(),
             )
-                .await
-                .unwrap();
+            .await
+            .unwrap();
         });
 
         let url = format!("ws://{}", addr);

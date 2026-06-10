@@ -94,9 +94,15 @@ async fn run_handle_request(request_buffer: Vec<u8>, config: Arc<config::Config>
 
 #[test]
 fn test_is_observer_route() {
-    assert!(observer_gateway::is_observer_route("/observer/notify-bridgeout"));
-    assert!(observer_gateway::is_observer_route("/observer/notify-bridgeout?x=1"));
-    assert!(observer_gateway::is_observer_route("/observer/transactions"));
+    assert!(observer_gateway::is_observer_route(
+        "/observer/notify-bridgeout"
+    ));
+    assert!(observer_gateway::is_observer_route(
+        "/observer/notify-bridgeout?x=1"
+    ));
+    assert!(observer_gateway::is_observer_route(
+        "/observer/transactions"
+    ));
     assert!(!observer_gateway::is_observer_route("/notify-bridgeout"));
     assert!(!observer_gateway::is_observer_route("/other"));
 }
@@ -107,23 +113,44 @@ async fn test_handle_request_valid_and_errors() {
     let config_no_url = Arc::new(test_config(vec![]));
 
     // Valid body → 200 accepted
-    let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_ok.clone()).await;
+    let res = run_handle_request(
+        post_request_with_body(r#"{"chainId":80002}"#),
+        config_ok.clone(),
+    )
+    .await;
     let text = String::from_utf8_lossy(&res);
-    assert!(text.starts_with("HTTP/1.1 200 OK") && text.contains(r#"{"Ok":"accepted"}"#), "{}", text);
+    assert!(
+        text.starts_with("HTTP/1.1 200 OK") && text.contains(r#"{"Ok":"accepted"}"#),
+        "{}",
+        text
+    );
     assert_cors_allow_all(&text);
 
     // Invalid bodies → 400
     for invalid_body in ["", "not json", r#"{"other":123}"#, r#"{"chainId":"80002"}"#] {
         let res = run_handle_request(post_request_with_body(invalid_body), config_ok.clone()).await;
         let text = String::from_utf8_lossy(&res);
-        assert!(text.starts_with("HTTP/1.1 400"), "body {:?} should get 400, got: {}", invalid_body, text);
+        assert!(
+            text.starts_with("HTTP/1.1 400"),
+            "body {:?} should get 400, got: {}",
+            invalid_body,
+            text
+        );
         assert_cors_allow_all(&text);
     }
 
     // No observer_urls → 503 (POST notify-bridgeout)
-    let res = run_handle_request(post_request_with_body(r#"{"chainId":80002}"#), config_no_url.clone()).await;
+    let res = run_handle_request(
+        post_request_with_body(r#"{"chainId":80002}"#),
+        config_no_url.clone(),
+    )
+    .await;
     let text = String::from_utf8_lossy(&res);
-    assert!(text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"), "{}", text);
+    assert!(
+        text.starts_with("HTTP/1.1 503") && text.contains("observer_urls not configured"),
+        "{}",
+        text
+    );
     assert_cors_allow_all(&text);
 
     // No observer_urls → 503 (GET /transaction)
