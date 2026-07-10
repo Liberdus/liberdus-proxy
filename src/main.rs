@@ -111,7 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             loop {
                 ticker.tick().await;
-                _liberdus.update_active_nodelist().await;
+                let liberdus = Arc::clone(&_liberdus);
+                tokio::spawn(async move {
+                    liberdus.update_active_nodelist().await;
+                });
             }
         });
 
@@ -124,7 +127,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             loop {
                 ticker.tick().await;
-                Arc::clone(&_archivers).discover().await;
+                let archivers = Arc::clone(&_archivers);
+                tokio::spawn(async move {
+                    archivers.discover().await;
+                });
             }
         });
     }

@@ -78,6 +78,21 @@ impl Liberdus {
     /// trigger a full nodelist update from one of the archivers
     pub async fn update_active_nodelist(&self) {
         let archivers = self.archivers.load_full();
+        let client = match reqwest::Client::builder()
+            .timeout(Duration::from_millis(
+                self.config.max_http_timeout_ms as u64,
+            ))
+            .build()
+        {
+            Ok(client) => client,
+            Err(e) => {
+                eprintln!(
+                    "Warning: failed to build HTTP client for nodelist refresh: {}",
+                    e
+                );
+                return;
+            }
+        };
 
         for archiver in archivers.iter() {
             let url = format!(
@@ -86,93 +101,77 @@ impl Liberdus {
             );
             // print url
             println!("Fetching nodelist from archiver: {}", url);
-            let collected_nodelist = match reqwest::get(&url).await {
-                Ok(resp) => {
-                    let body: Result<SignedNodeListResp, _> =
-                        serde_json::from_str(&resp.text().await.unwrap());
-                    match body {
-                        Ok(body) => {
-                            Ok(body.nodeList)
-                            // //important that serde doesn't populate default value for
-                            // // Consensor::trip_ms
-                            // // it'll taint the signature payload
-                            // if self.verify_signature(&body) {
-                            //     Ok(body.nodeList)
-                            // } else {
-                            //     println!("Warning: Invalid signature from archiver {}", archiver.ip);
-                            //     Err(std::io::Error::new(
-                            //         std::io::ErrorKind::InvalidData,
-                            //         "Invalid signature",
-                            //     ))
-                            // }
-                        }
-                        Err(e) => Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            e.to_string(),
-                        )),
+            let body_text = match client.get(&url).send().await {
+                Ok(resp) => match resp.text().await {
+                    Ok(body) => body,
+                    Err(e) => {
+                        eprintln!("Warning: nodelist response read failed for {}: {}", url, e);
+                        continue;
                     }
-                }
-                Err(e) => Err(std::io::Error::new(
-                    std::io::ErrorKind::ConnectionAborted,
-                    e.to_string(),
-                )),
-            };
-
-            match collected_nodelist {
-                Ok(mut nodelist) => {
-                    if self.config.standalone_network.enabled {
-                        let replacement_ip = self.config.standalone_network.replacement_ip.clone();
-                        for node in nodelist.iter_mut() {
-                            node.ip = replacement_ip.clone();
-                        }
-                    }
-
-                    // Filter out top and bottom nodes from the join-ordered list
-                    // This helps avoid nodes that might be joining/leaving or unstable
-                    if self.config.node_filtering.enabled
-                        && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering
-                    {
-                        let remove_bottom = self.config.node_filtering.remove_bottom_nodes;
-                        let remove_top = self.config.node_filtering.remove_top_nodes;
-
-                        // Remove bottom nodes first (affects indices less)
-                        let nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
-                        nodelist.truncate(nodes_to_keep);
-
-                        // Remove top nodes
-                        if remove_top > 0 && nodelist.len() > remove_top {
-                            nodelist.drain(0..remove_top);
-                        }
-
-                        println!("Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)", 
-                                 nodelist.len(), remove_top, remove_bottom);
-                    } else if self.config.node_filtering.enabled {
-                        println!("Warning: Nodelist too small ({} nodes), not filtering to avoid service disruption (min required: {})", 
-                                 nodelist.len(), self.config.node_filtering.min_nodes_for_filtering);
-                    }
-
-                    self.active_nodelist.store(Arc::new(nodelist));
-
-                    {
-                        let mut guard = self.load_distribution_commulative_bias.write().await;
-                        *guard = Vec::new();
-                    }
-                    {
-                        let mut guard = self.trip_ms.write().await;
-                        *guard = HashMap::new();
-                    }
-
-                    self.round_robin_index
-                        .store(0, std::sync::atomic::Ordering::Release);
-                    // inititally node list does not contain load data.
-                    self.list_prepared
-                        .store(false, std::sync::atomic::Ordering::Release);
-                    break;
-                }
-                Err(_e) => {
+                },
+                Err(e) => {
+                    eprintln!("Warning: nodelist fetch failed for {}: {}", url, e);
                     continue;
                 }
+            };
+
+            let body: SignedNodeListResp = match serde_json::from_str(&body_text) {
+                Ok(body) => body,
+                Err(e) => {
+                    eprintln!("Warning: nodelist response parse failed for {}: {}", url, e);
+                    continue;
+                }
+            };
+
+            let mut nodelist = body.nodeList;
+            if self.config.standalone_network.enabled {
+                let replacement_ip = self.config.standalone_network.replacement_ip.clone();
+                for node in nodelist.iter_mut() {
+                    node.ip = replacement_ip.clone();
+                }
             }
+
+            // Filter out top and bottom nodes from the join-ordered list
+            // This helps avoid nodes that might be joining/leaving or unstable
+            if self.config.node_filtering.enabled
+                && nodelist.len() > self.config.node_filtering.min_nodes_for_filtering
+            {
+                let remove_bottom = self.config.node_filtering.remove_bottom_nodes;
+                let remove_top = self.config.node_filtering.remove_top_nodes;
+
+                // Remove bottom nodes first (affects indices less)
+                let nodes_to_keep = nodelist.len().saturating_sub(remove_bottom);
+                nodelist.truncate(nodes_to_keep);
+
+                // Remove top nodes
+                if remove_top > 0 && nodelist.len() > remove_top {
+                    nodelist.drain(0..remove_top);
+                }
+
+                println!("Filtered nodelist: using {} nodes (removed top {} and bottom {} from join order)", 
+                         nodelist.len(), remove_top, remove_bottom);
+            } else if self.config.node_filtering.enabled {
+                println!("Warning: Nodelist too small ({} nodes), not filtering to avoid service disruption (min required: {})", 
+                         nodelist.len(), self.config.node_filtering.min_nodes_for_filtering);
+            }
+
+            self.active_nodelist.store(Arc::new(nodelist));
+
+            {
+                let mut guard = self.load_distribution_commulative_bias.write().await;
+                *guard = Vec::new();
+            }
+            {
+                let mut guard = self.trip_ms.write().await;
+                *guard = HashMap::new();
+            }
+
+            self.round_robin_index
+                .store(0, std::sync::atomic::Ordering::Release);
+            // inititally node list does not contain load data.
+            self.list_prepared
+                .store(false, std::sync::atomic::Ordering::Release);
+            break;
         }
     }
 

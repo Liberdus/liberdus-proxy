@@ -9,6 +9,7 @@ use crate::crypto::ShardusCrypto;
 use arc_swap::ArcSwap;
 use std::fs;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
 pub struct ArchiverUtil {
@@ -102,10 +103,40 @@ impl ArchiverUtil {
                 let long_lived_self = self.clone();
 
                 tokio::spawn(async move {
-                    let resp = match reqwest::get(url).await {
+                    let client = match reqwest::Client::builder()
+                        .timeout(Duration::from_millis(
+                            long_lived_self.config.max_http_timeout_ms as u64,
+                        ))
+                        .build()
+                    {
+                        Ok(client) => client,
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: failed to build HTTP client for archiver discovery: {}",
+                                e
+                            );
+                            let _ = transmitter.send(Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidData,
+                                "Invalid response",
+                            )));
+                            return;
+                        }
+                    };
+
+                    let resp = match client.get(url).send().await {
                         Ok(resp) => {
+                            let body_text = match resp.text().await {
+                                Ok(body) => body,
+                                Err(_) => {
+                                    let _ = transmitter.send(Err(std::io::Error::new(
+                                        std::io::ErrorKind::InvalidData,
+                                        "Invalid response",
+                                    )));
+                                    return;
+                                }
+                            };
                             let body: Result<SignedArchiverListResponse, _> =
-                                serde_json::from_str(&resp.text().await.unwrap());
+                                serde_json::from_str(&body_text);
                             match body {
                                 Ok(body) => {
                                     if long_lived_self.verify_signature(&body) {
